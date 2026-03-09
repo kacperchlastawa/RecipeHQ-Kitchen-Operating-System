@@ -1,45 +1,66 @@
-from sqlalchemy import String, BigInteger, ForeignKey, Enum, Text
+from sqlalchemy import String, BigInteger, ForeignKey, Enum as SqlEnum, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped,mapped_column, relationship
 from typing import List, Optional
 from enum import Enum
 
-from urllib3.poolmanager import PoolKey
-
-
 class Base(DeclarativeBase):
     pass
 
-class User():
-    def __init__(self, id:PoolKey, login, password):
-        self.id = id
-        self.login = login
-        self.password = password
+class UserRole(str, Enum):
+    OWNER = "owner"
+    PARTICIPANT = "participant"
 
-class Project():
-    def __init__(self, id:PoolKey, name:str, description: Text, total_files_size: BigInteger = 0):
-        self.id = id
-        self.name = name
-        self.description = description
-        self.total_files_size = total_files_size
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    login: Mapped[str] = mapped_column(String(50), unique = True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
 
-    #todo : relacje - lista dokumentów przypisanych do projektu, lista uczestników
-    #todo : ustaw cascade = "all, delete-orphan" w relacji do dokumentów.
+    project_memberships: Mapped[List["ProjectParticipant"]] = relationship(back_populates="user")
 
-class ProjectParticipant():
-    def __init__(self, id:PoolKey, user_id:ForeignKey, project_id:ForeignKey):
-        self.id = id
-        self.user_id = user_id
-        self.project_id = project_id
-        #role
+    def __repr__(self):
+        return f"<User {self.login}>"
 
-#todo Enum z rolami owner i participant - przechowywane w sqlenum
+class Project(Base):
+    __tablename__ = "projects"
 
-class Document():
-    def __init__(self, id:PoolKey, project_id:ForeignKey, file_name, s3_key, file_size :BigInteger):
-        self.id = id
-        self.project_id = project_id
-        self.file_name = file_name
-        self.s3_key = s3_key
-        self.file_size = file_size
+    id : Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    total_files_size: Mapped[int] = mapped_column(BigInteger, default=0)
 
-        #todo relacje - odnośnik powrotny do projektu
+    participants: Mapped[List["ProjectParticipant"]] = relationship(back_populates="project",cascade="all, delete-orphan")
+    documents: Mapped[List["Document"]] = relationship(back_populates="project",cascade="all, delete-orphan")
+    def __repr__(self):
+        return f"<Project {self.name}>"
+
+class ProjectParticipant(Base):
+    __tablename__ = "project_participants"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+
+    role: Mapped[UserRole] = mapped_column(
+        SqlEnum(UserRole),
+        default=UserRole.PARTICIPANT,
+        nullable=False
+    )
+    user: Mapped[User] = relationship(back_populates="project_memberships")
+    project: Mapped[Project] = relationship(back_populates="participants")
+
+    def __repr__(self):
+        return f"<Participant {self.user_id} in {self.project_id} as {self.role}>"
+
+class Document(Base):
+    __tablename__ = "documents"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    file_name: Mapped[str] = mapped_column(String(255))
+    s3_key: Mapped[str] = mapped_column(String(512), unique=True)
+    file_size: Mapped[int] = mapped_column(BigInteger)
+
+    project: Mapped[Project] = relationship(back_populates="documents")
+    def __repr__(self):
+        return f"<Document {self.file_name}>"
+
