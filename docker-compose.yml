@@ -1,17 +1,46 @@
 version: '3.8'
 
 services:
+  # 1. Baza danych PostgreSQL
   db:
     image: postgres:16-alpine
     container_name: recipe_hq_db
+    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: recipe_hq
     ports:
-      - "5433:5432"  # Mapowanie: HOST:KONTENER
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  # 2. LocalStack (S3, Lambda) - Symulacja AWS
+  localstack:
+    image: localstack/localstack:latest
+    container_name: recipe_hq_aws
+    ports:
+      - "4566:4566"            # Główny port dla usług AWS
+    environment:
+      - SERVICES=s3,lambda
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+  # 3. Twoja aplikacja FastAPI
+  app:
+    build: .
+    container_name: recipe_hq_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app                 # Montowanie kodu na żywo (hot-reload)
+    env_file:
+      - .env                   # Wczytywanie haseł i kluczy z pliku
+    depends_on:
+      - db
+      - localstack
 
 volumes:
   postgres_data:
