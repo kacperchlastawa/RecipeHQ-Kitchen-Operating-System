@@ -8,7 +8,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: czarny123
       POSTGRES_DB: recipe_hq
     ports:
       - "5433:5432"
