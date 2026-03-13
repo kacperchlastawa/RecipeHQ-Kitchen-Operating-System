@@ -5,7 +5,7 @@ from app.db.session import get_db
 from app.db.models import User
 from app.schemas.auth import UserCreate,UserResponse,UserLogin, Token
 from app.core.security import get_password_hash, verify_password, create_access_token
-
+from app.api.deps import get_current_user
 router = APIRouter()
 
 @router.post("/auth", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -42,3 +42,10 @@ async def login_user(form_data: UserLogin, db: AsyncSession = Depends(get_db)):
                             headers={"WWW-Authenticate": "Bearer"})
     access_token = create_access_token(data={"sub": form_data.login})
     return {"access_token": access_token, "token_type": "bearer"}
+@router.get("/me", response_model=UserResponse)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    """
+    Zwraca dane aktualnie zalogowanego kucharza.
+    Wymaga poprawnego tokena JWT w nagłówku.
+    """
+    return current_user
