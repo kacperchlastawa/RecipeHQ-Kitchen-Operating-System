@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-
+from app.db.models import User, Recipe
 @pytest.mark.asyncio
 async def test_register_and_login_flow(client: AsyncClient):
     """
@@ -60,3 +60,32 @@ async def test_register_and_login_flow(client: AsyncClient):
         response = await client.post("/api/v1/login", data=login_data)
         assert response.status_code == 401
         assert "WWW-Authenticate" in response.headers
+
+    @pytest.mark.asyncio
+    async def test_create_recipe_model_relationship(db_session):
+        """Testuje relację 1:N między użytkownikiem a przepisem."""
+        # 1. Tworzymy kucharza
+        new_user = User(login="chef_model_test", hashed_password="hashed_password")
+        db_session.add(new_user)
+        await db_session.commit()
+        await db_session.refresh(new_user)
+
+        # 2. Tworzymy przepis przypisany do kucharza
+        new_recipe = Recipe(
+            title="Testowy Przepis",
+            description="Opis",
+            cooking_time=15,
+            difficulty="Easy",
+            kcal=200,
+            ingredients=["składnik 1"],
+            owner_id=new_user.id  # Łączymy kluczem obcym
+        )
+        db_session.add(new_recipe)
+        await db_session.commit()
+
+        # 3. Weryfikacja relacji (Lazy Loading / Refresh)
+        await db_session.refresh(new_user)
+
+        assert len(new_user.recipes) == 1
+        assert new_user.recipes[0].title == "Testowy Przepis"
+        assert new_user.recipes[0].owner.login == "chef_model_test"
