@@ -1,4 +1,4 @@
-from sqlalchemy import String, BigInteger, ForeignKey, Enum as SqlEnum, Text
+from sqlalchemy import String, BigInteger, ForeignKey, Enum as SqlEnum, Text,JSON, Column,Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped,mapped_column, relationship
 from typing import List, Optional
 from enum import Enum
@@ -17,6 +17,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
 
     project_memberships: Mapped[List["ProjectParticipant"]] = relationship(back_populates="user")
+    recipes: Mapped[List["Recipe"]] = relationship("Recipe", back_populates="owner", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.login}>"
@@ -64,3 +65,21 @@ class Document(Base):
     def __repr__(self):
         return f"<Document {self.file_name}>"
 
+class Recipe(Base):
+    __tablename__ = "recipes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    cooking_time: Mapped[int] = mapped_column()
+    difficulty: Mapped[str] = mapped_column(String(20))
+    kcal: Mapped[Optional[int]] = mapped_column()
+
+    ingredients: Mapped[dict] = mapped_column(JSON)
+    allergens: Mapped[Optional[dict]] = mapped_column(JSON)
+    image_url: Mapped[Optional[str]] = mapped_column(String(512))
+
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    owner: Mapped["User"] = relationship(back_populates="recipes")
+
+    def __repr__(self):
+        return f"<Recipe {self.title}>"
