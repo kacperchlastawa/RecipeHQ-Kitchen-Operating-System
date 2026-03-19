@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from app.core.config import settings
-from app.api.endpoints import auth
+from app.api.endpoints import auth, recipes
 app = FastAPI(title="RecipeHQ - Kitchen OS")
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
+app.include_router(recipes.router, prefix="/api/v1", tags=["Recipes"])
 @app.get("/")
 def read_root():
     return {
