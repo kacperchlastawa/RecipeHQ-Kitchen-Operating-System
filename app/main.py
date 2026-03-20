@@ -1,9 +1,27 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.core.config import settings
 from app.api.endpoints import auth, recipes
-app = FastAPI(title="RecipeHQ - Kitchen OS")
+from app.db.session import engine
+from app.db.models import Base
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- TO DZIEJE SIĘ PRZY STARCIE ---
+    async with engine.begin() as conn:
+        # Sprawdza modele i tworzy brakujące tabele w Postgresie
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # --- TO DZIEJE SIĘ PRZY WYŁĄCZANIU ---
+    await engine.dispose()
+
+app = FastAPI(
+    title="RecipeHQ - Kitchen OS",
+    lifespan=lifespan
+)
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
+
 app.include_router(recipes.router, prefix="/api/v1", tags=["Recipes"])
 @app.get("/")
 def read_root():
