@@ -22,7 +22,7 @@ app = FastAPI(
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
 
-app.include_router(recipes.router, prefix="/api/v1", tags=["Recipes"])
+app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["Recipes"])
 @app.get("/")
 def read_root():
     return {
