@@ -28,19 +28,32 @@ services:
     volumes:
       - "./localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
-  # 3. Twoja aplikacja FastAPI
+  # 3.aplikacja FastAPI
   app:
     build: .
     container_name: recipe_hq_app
     ports:
       - "8000:8000"
     volumes:
-      - .:/app                 # Montowanie kodu na żywo (hot-reload)
+      - .:/app
     env_file:
-      - .env                   # Wczytywanie haseł i kluczy z pliku
+      - .env
     depends_on:
       - db
       - localstack
+
+  frontend:
+    build: ./frontend
+    container_name: recipe_hq_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://app:8000/api/v1
+    depends_on:
+      - app
 
 volumes:
   postgres_data:
