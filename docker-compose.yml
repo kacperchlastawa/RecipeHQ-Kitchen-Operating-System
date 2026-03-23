@@ -26,9 +26,8 @@ services:
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
-      - "./localstack_data:/var/lib/localstack"  # PERSYSTENCJA! Bez tego po restarcie zdjęcia znikną.
+      - "./localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      -
   # 3. Twoja aplikacja FastAPI
   app:
     build: .
