@@ -15,19 +15,20 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # 2. LocalStack (S3, Lambda) - Symulacja AWS
   localstack:
     image: localstack/localstack:latest
     container_name: recipe_hq_aws
     ports:
-      - "4566:4566"            # Główny port dla usług AWS
+      - "4566:4566"
     environment:
-      - SERVICES=s3,lambda
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
+      - "./localstack_data:/var/lib/localstack"  # PERSYSTENCJA! Bez tego po restarcie zdjęcia znikną.
       - "/var/run/docker.sock:/var/run/docker.sock"
-
+      -
   # 3. Twoja aplikacja FastAPI
   app:
     build: .
