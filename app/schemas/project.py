@@ -8,13 +8,13 @@ class ProjectBase(BaseModel):
     description: Optional[str] = None
     event_date: Optional[datetime] = None
 
-class ProjectCreate(BaseModel):
+class ProjectCreate(ProjectBase):
     pass
 
 class ProjectResponse(ProjectBase):
     id: int
     total_files_size: int
     model_config = ConfigDict(from_attributes=True)
-    
+
 class ProjectRecipeAdd(BaseModel):
     recipe_id: int
