@@ -1,7 +1,8 @@
-from sqlalchemy import String, BigInteger, ForeignKey, Enum as SqlEnum, Text,JSON, Column,Integer
+from sqlalchemy import String, BigInteger, ForeignKey, Enum as SqlEnum, Text,JSON, Column,Integer, Table, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped,mapped_column, relationship
 from typing import List, Optional
 from enum import Enum
+from datetime import datetime
 
 class Base(DeclarativeBase):
     pass
@@ -9,6 +10,14 @@ class Base(DeclarativeBase):
 class UserRole(str, Enum):
     OWNER = "owner"
     PARTICIPANT = "participant"
+
+# --- TABELA ŁĄCZĄCA: Projekty <-> Receptury (Many-to-Many) ---
+project_recipes = Table(
+    "project_recipes",
+    Base.metadata,
+    Column("project_id", Integer, ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True),
+    Column("recipe_id", Integer, ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True),
+)
 
 class User(Base):
     __tablename__ = "users"
@@ -28,10 +37,14 @@ class Project(Base):
     id : Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[Optional[str]] = mapped_column(Text)
+    event_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     total_files_size: Mapped[int] = mapped_column(BigInteger, default=0)
 
     participants: Mapped[List["ProjectParticipant"]] = relationship(back_populates="project",cascade="all, delete-orphan")
     documents: Mapped[List["Document"]] = relationship(back_populates="project",cascade="all, delete-orphan")
+
+    recipes: Mapped[List["Recipe"]] = relationship(secondary=project_recipes, back_populates="projects")
+
     def __repr__(self):
         return f"<Project {self.name}>"
 
@@ -81,5 +94,7 @@ class Recipe(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     owner: Mapped["User"] = relationship(back_populates="recipes")
 
+    #RELACJA DO PROJEKTÓW
+    projects: Mapped[List["Project"]] = relationship(secondary= project_recipes, back_populates="recipes")
     def __repr__(self):
         return f"<Recipe {self.title}>"
