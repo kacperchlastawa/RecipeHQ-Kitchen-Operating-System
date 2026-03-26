@@ -10,7 +10,18 @@ interface RecipeImageProps {
 export default function RecipeImage({ src, alt }: RecipeImageProps) {
   const [error, setError] = useState(false);
 
-  if (!src || error) {
+  // --- TUTAJ WKLEJAMY LOGIKĘ NAPRAWCZĄ ---
+  const getCorrectImageUrl = (url: string | null) => {
+    if (!url) return null;
+    // Zamieniamy 'localstack' na 'localhost', aby przeglądarka mogła pobrać plik
+    return url.replace("localstack", "localhost");
+  };
+
+  const finalSrc = getCorrectImageUrl(src);
+  // ---------------------------------------
+
+  // Jeśli src jest nullem, finalSrc będzie nullem i wyświetlimy placeholder
+  if (!finalSrc || error) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-100 text-slate-400 p-4 text-center">
         <span className="text-2xl mb-2">📸</span>
@@ -22,7 +33,7 @@ export default function RecipeImage({ src, alt }: RecipeImageProps) {
 
   return (
     <img
-      src={src}
+      src={finalSrc} // Używamy przetworzonego adresu
       alt={alt}
       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
       onError={() => setError(true)}

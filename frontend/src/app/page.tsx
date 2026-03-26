@@ -1,3 +1,4 @@
+// src/app/page.tsx
 import { getRecipes } from "@/lib/api";
 import RecipeImage from "@/components/RecipeImage";
 
@@ -14,7 +15,7 @@ export default async function Home() {
           <p className="text-slate-500 mt-2 font-medium">Operacyjne Menu i Dokumentacja Plate-up</p>
         </div>
         <div className="text-right text-xs text-slate-400 font-mono">
-          SERVER TIME: 2026.03.24
+          SERVER TIME: 2026.03.26
         </div>
       </header>
 
@@ -22,7 +23,7 @@ export default async function Home() {
         {recipes.map((recipe: any) => (
           <div key={recipe.id} className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-300">
             <div className="relative h-56 w-full bg-slate-100">
-              {/* UŻYWAMY NASZEGO NOWEGO KOMPONENTU */}
+              {/* Nasz naprawiony komponent obrazka */}
               <RecipeImage src={recipe.image_url} alt={recipe.title} />
 
               <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold shadow-sm">

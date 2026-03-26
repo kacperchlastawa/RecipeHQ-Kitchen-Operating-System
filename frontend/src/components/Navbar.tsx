@@ -20,14 +20,14 @@ export default function Navbar() {
             </Link>
 
             <div className="hidden md:flex items-center gap-6">
-              <Link href="/" className="text-sm font-semibold text-slate-600 hover:text-orange-600 transition-colors">
+            <Link href="/dashboard" className="text-sm font-semibold text-slate-600 hover:text-orange-600 transition-colors">
                 🏠 Dashboard
               </Link>
               <Link href="/events" className="text-sm font-semibold text-slate-600 hover:text-orange-600 transition-colors">
                 📅 Eventy Cateringowe
               </Link>
               <Link href="/recipes" className="text-sm font-semibold text-slate-600 hover:text-orange-600 transition-colors">
-                📑 Baza Receptur
+                    📑 Baza Receptur
               </Link>
             </div>
           </div>

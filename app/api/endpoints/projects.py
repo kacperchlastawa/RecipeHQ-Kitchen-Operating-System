@@ -5,6 +5,7 @@ from app.db.session import get_db
 from app.db.models import Project,ProjectParticipant,UserRole,Recipe,User
 from app.schemas.project import ProjectCreate,ProjectResponse,ProjectRecipeAdd
 from app.api.deps import get_current_user
+from typing import List
 
 router = APIRouter()
 
@@ -63,3 +64,21 @@ async def add_recipe_to_project(
     project.recipes.append(recipe)
     await db.commit()
     return {"message": f"Recipe {recipe.title} successfully added to project {project.name}"}
+
+
+@router.get("/", response_model=List[ProjectResponse])
+async def list_projects(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """Pobiera listę projektów, do których przypisany jest zalogowany kucharz."""
+
+    # Wybieramy projekty, do których użytkownik jest dopisany jako Participant
+    result = await db.execute(
+        select(Project)
+        .join(ProjectParticipant)
+        .where(ProjectParticipant.user_id == current_user.id)
+    )
+
+    projects = result.scalars().all()
+    return projects
