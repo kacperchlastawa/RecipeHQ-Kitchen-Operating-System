@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.db.models import Project,ProjectParticipant,UserRole,Recipe,User
 from app.schemas.project import ProjectCreate,ProjectResponse,ProjectRecipeAdd
@@ -82,3 +83,27 @@ async def list_projects(
 
     projects = result.scalars().all()
     return projects
+
+@router.get("/{project_id}", response_model=ProjectResponse)
+async def get_project(
+        project_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Project).options(selectinload(Project.recipes)).where(Project.id == project_id))
+    project = result.scalars().one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return project
+
+
+
+
+
+
+
+
+
+
