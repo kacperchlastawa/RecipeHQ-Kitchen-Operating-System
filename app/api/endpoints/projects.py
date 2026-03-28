@@ -52,8 +52,7 @@ async def add_recipe_to_project(
         db: AsyncSession = Depends(get_db),
         curret_user=Depends(get_current_user)
 ):
-    # ZMIANA: Dodajemy .options(selectinload(Project.recipes))
-    # Dzięki temu SQLAlchemy załaduje listę przepisów asynchronicznie już na starcie
+
     result_proj = await db.execute(
         select(Project)
         .where(Project.id == project_id)
@@ -70,7 +69,6 @@ async def add_recipe_to_project(
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    # Teraz to zadziała, bo project.recipes jest już w pamięci (załadowane)
     if recipe not in project.recipes:
         project.recipes.append(recipe)
         await db.commit()
@@ -88,12 +86,11 @@ async def list_projects(
 ):
     """Pobiera listę projektów kucharza RAZEM z przepisami (naprawia błąd 500)."""
 
-    # Łączymy logikę: filtrujemy po uczestniku + ładujemy relację recipes
     query = (
         select(Project)
         .join(ProjectParticipant)
         .where(ProjectParticipant.user_id == current_user.id)
-        .options(selectinload(Project.recipes))  # TO JEST KLUCZ - musi być tutaj!
+        .options(selectinload(Project.recipes))
         .offset(skip)
         .limit(limit)
         .distinct()
