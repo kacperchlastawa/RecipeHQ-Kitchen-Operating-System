@@ -44,14 +44,21 @@ async def create_event(
     await db.refresh(new_project)
     return new_project
 
+
 @router.post("/{project_id}/recipes")
 async def add_recipe_to_project(
         project_id: int,
         data: ProjectRecipeAdd,
         db: AsyncSession = Depends(get_db),
-        curret_user = Depends(get_current_user)
+        curret_user=Depends(get_current_user)
 ):
-    result_proj = await db.execute(select(Project).where(Project.id == project_id))
+    # ZMIANA: Dodajemy .options(selectinload(Project.recipes))
+    # Dzięki temu SQLAlchemy załaduje listę przepisów asynchronicznie już na starcie
+    result_proj = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .options(selectinload(Project.recipes))
+    )
     project = result_proj.scalars().one_or_none()
 
     if not project:
@@ -59,29 +66,42 @@ async def add_recipe_to_project(
 
     result_rec = await db.execute(select(Recipe).where(Recipe.id == data.recipe_id))
     recipe = result_rec.scalars().one_or_none()
+
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    project.recipes.append(recipe)
-    await db.commit()
-    return {"message": f"Recipe {recipe.title} successfully added to project {project.name}"}
+    # Teraz to zadziała, bo project.recipes jest już w pamięci (załadowane)
+    if recipe not in project.recipes:
+        project.recipes.append(recipe)
+        await db.commit()
+        return {"message": f"Recipe {recipe.title} successfully added to project {project.name}"}
+    else:
+        return {"message": "Recipe already in project"}
 
 
 @router.get("/", response_model=List[ProjectResponse])
 async def list_projects(
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        skip: int = 0,
+        limit: int = 100
 ):
-    """Pobiera listę projektów, do których przypisany jest zalogowany kucharz."""
+    """Pobiera listę projektów kucharza RAZEM z przepisami (naprawia błąd 500)."""
 
-    # Wybieramy projekty, do których użytkownik jest dopisany jako Participant
-    result = await db.execute(
+    # Łączymy logikę: filtrujemy po uczestniku + ładujemy relację recipes
+    query = (
         select(Project)
         .join(ProjectParticipant)
         .where(ProjectParticipant.user_id == current_user.id)
+        .options(selectinload(Project.recipes))  # TO JEST KLUCZ - musi być tutaj!
+        .offset(skip)
+        .limit(limit)
+        .distinct()
     )
 
+    result = await db.execute(query)
     projects = result.scalars().all()
+
     return projects
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -97,13 +117,3 @@ async def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project
-
-
-
-
-
-
-
-
-
-
