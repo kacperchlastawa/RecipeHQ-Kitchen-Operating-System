@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.db.models import Project,ProjectParticipant,UserRole,Recipe,User,DocumentType,Document
 from app.schemas.project import ProjectCreate,ProjectResponse,ProjectRecipeAdd
 from app.schemas.document import DocumentResponse
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, check_project_owner
 from typing import List
 from PIL import Image
 import io
@@ -151,7 +151,7 @@ async def remove_recipe_from_project(
         project_id: int,
         recipe_id: int,
         db: AsyncSession = Depends(get_db),
-        current_user=Depends(get_current_user)
+        _=Depends(check_project_owner)
 ):
     result = await db.execute(
         select(Project)

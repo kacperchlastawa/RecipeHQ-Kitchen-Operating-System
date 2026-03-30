@@ -1,17 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import RecipeImage from "@/components/RecipeImage";
 import AddRecipeToProjectModal from "@/components/AddRecipeToProjectModal";
-import DocumentManager from "@/components/DocumentManager"; // IMPORTUJEMY NOWY KOMPONENT
+import DocumentManager from "@/components/DocumentManager";
 
 export default function ProjectDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+    }
+  }, [router]);
   const fetchProjectDetails = async () => {
     try {
       const token = localStorage.getItem("token");

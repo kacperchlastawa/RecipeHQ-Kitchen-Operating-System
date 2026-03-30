@@ -4,7 +4,7 @@ from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.config import settings
-from app.db.models import User
+from app.db.models import User,ProjectParticipant,UserRole
 from app.db.session import get_db
 from app.schemas.auth import TokenData
 
@@ -32,3 +32,18 @@ async def get_current_user(db:AsyncSession = Depends(get_db),token : str = Depen
     if user is None:
         raise credentials_exception
     return user
+
+async def check_project_owner(
+        project_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(
+        select(ProjectParticipant).where(ProjectParticipant.project_id == project_id,
+                                         ProjectParticipant.user_id == current_user.id, ProjectParticipant.role == UserRole.OWNER)
+        )
+    participant = result.scalars().one_or_none()
+    if not participant:
+        raise HTTPException(status_code=403, detail="Only the owner can access this resource")
+
+    return participant

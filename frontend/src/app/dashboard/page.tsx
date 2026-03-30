@@ -1,13 +1,22 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import ProjectCard from "@/components/ProjectCard";
 import { Project } from "@/types/project";
 import AddProjectModal from "@/components/AddProjectModal";
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+    }
+  }, [router]);
 
   const fetchProjects = useCallback(async () => {
     try {
