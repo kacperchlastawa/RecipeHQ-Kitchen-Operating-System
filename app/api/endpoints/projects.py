@@ -101,7 +101,7 @@ async def list_projects(
         select(Project)
         .join(ProjectParticipant)
         .where(ProjectParticipant.user_id == current_user.id)
-        .options(selectinload(Project.recipes))
+        .options(selectinload(Project.recipes),selectinload(Project.documents))
         .offset(skip)
         .limit(limit)
         .distinct()
@@ -118,7 +118,7 @@ async def get_project(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(select(Project).options(selectinload(Project.recipes)).where(Project.id == project_id))
+    result = await db.execute(select(Project).options(selectinload(Project.recipes),selectinload(Project.documents)).where(Project.id == project_id))
     project = result.scalars().one_or_none()
 
     if not project:

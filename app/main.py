@@ -5,6 +5,7 @@ from app.api.endpoints import auth, recipes, projects
 from app.db.session import engine
 from app.db.models import Base
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,7 +28,7 @@ app.add_middleware(
     allow_methods=["*"], # Pozwalamy na GET, POST, PATCH, DELETE
     allow_headers=["*"],
 )
-
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
 
 app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["Recipes"])
