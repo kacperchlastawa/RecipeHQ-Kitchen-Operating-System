@@ -10,10 +10,29 @@ from app.schemas.project import ProjectCreate,ProjectResponse,ProjectRecipeAdd
 from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user
 from typing import List
+from PIL import Image
+import io
 
 router = APIRouter()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def optimize_image(file_content: bytes, filename: str):
+    """Pomocnicza funkcja do konwersji na WebP i resize'u"""
+    img = Image.open(io.BytesIO(file_content))
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+    if img.width > 1200:
+        new_width = 1200
+        new_height = int(img.height * (new_width / img.width))
+        img = img.resize((new_width, new_height), Image.LANCZOS)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="WEBP", quality=80)
+    optimized_content = buffer.getvalue()
+
+    new_filename = os.path.splitext(filename)[0] + ".webp"
+    return optimized_content, new_filename
 
 @router.post("/", response_model=ProjectResponse)
 async def create_event(
@@ -167,20 +186,32 @@ async def upload_document(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    content = await file.read()
+    final_content = content
+    final_filename = file.filename
+    final_mime = file.content_type
 
-    file_path = os.path.join(UPLOAD_DIR, f"{project_id}_{file.filename}")
+    is_image = file.content_type.startswith("image/")
+    if is_image:
+        try:
+            final_content, final_filename = optimize_image(content, file.filename)
+            final_mime = "image/webp"
+        except Exception as e:
+            print(f"Błąd optymalizacji: {e}. Zapisuję oryginał.")
+
+    file_path = os.path.join(UPLOAD_DIR, f"{project_id}_{final_filename}")
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(final_content)
 
-    size = os.path.getsize(file_path)
+    size = len(final_content)
 
     new_doc = Document(
         project_id=project_id,
-        file_name=file.filename,
+        file_name=final_filename,
         s3_key=file_path,
         file_size=size,
-        mime_type=file.content_type,
-        document_type=DocumentType.OTHER
+        mime_type=final_mime,
+        document_type=DocumentType.PLATE_UP if is_image else DocumentType.OTHER
     )
     db.add(new_doc)
 
@@ -190,5 +221,7 @@ async def upload_document(
     await db.refresh(new_doc)
 
     return new_doc
+
+
 
 
