@@ -1,13 +1,14 @@
 from sqlalchemy import String, BigInteger, ForeignKey, Enum as SqlEnum, Text,JSON, Column,Integer, Table, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped,mapped_column, relationship
 from typing import List, Optional
-from enum import Enum
+from sqlalchemy.sql import func
+import enum
 from datetime import datetime
 
 class Base(DeclarativeBase):
     pass
 
-class UserRole(str, Enum):
+class UserRole(str, enum.Enum):
     OWNER = "owner"
     PARTICIPANT = "participant"
 
@@ -66,13 +67,25 @@ class ProjectParticipant(Base):
     def __repr__(self):
         return f"<Participant {self.user_id} in {self.project_id} as {self.role}>"
 
+class DocumentType(enum.Enum):
+    HACCP = "haccp"
+    PLATE_UP = "plate_up"
+    RECIPE_PDF = "recipe_pdf"
+    OTHER = "other"
 class Document(Base):
     __tablename__ = "documents"
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
-    file_name: Mapped[str] = mapped_column(String(255))
-    s3_key: Mapped[str] = mapped_column(String(512), unique=True)
-    file_size: Mapped[int] = mapped_column(BigInteger)
+
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    s3_key: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    document_type: Mapped[DocumentType] = mapped_column(
+        SqlEnum(DocumentType), default=DocumentType.OTHER
+    )
+    upload_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     project: Mapped[Project] = relationship(back_populates="documents")
     def __repr__(self):

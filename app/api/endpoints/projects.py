@@ -1,15 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile,File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import shutil
+import os
 from sqlalchemy.orm import selectinload
 from app.db.session import get_db
-from app.db.models import Project,ProjectParticipant,UserRole,Recipe,User
+from app.db.models import Project,ProjectParticipant,UserRole,Recipe,User,DocumentType,Document
 from app.schemas.project import ProjectCreate,ProjectResponse,ProjectRecipeAdd
+from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user
 from typing import List
 
 router = APIRouter()
-
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/", response_model=ProjectResponse)
 async def create_event(
@@ -30,7 +34,6 @@ async def create_event(
 
     db.add(new_project)
     await db.commit()
-    await db.refresh(new_project)
 
     # 2. Dodajemy twórcę jako OWNERA
     participant = ProjectParticipant(
@@ -40,9 +43,17 @@ async def create_event(
     )
     db.add(participant)
     await db.commit()
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == new_project.id)
+        .options(
+            selectinload(Project.recipes),
+            selectinload(Project.documents)
+        )
+    )
+    project_final = result.scalars().one()
 
-    await db.refresh(new_project)
-    return new_project
+    return project_final
 
 
 @router.post("/{project_id}/recipes")
@@ -140,5 +151,44 @@ async def remove_recipe_from_project(
 
     project.recipes.remove(recipe_to_remove)
     await db.commit()
-
     return {"message": "Danie usunięte z menu"}
+
+
+@router.post("/{project_id}/documents", response_model=DocumentResponse)
+async def upload_document(
+        project_id: int,
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user)
+):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalars().one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
+    file_path = os.path.join(UPLOAD_DIR, f"{project_id}_{file.filename}")
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    size = os.path.getsize(file_path)
+
+    new_doc = Document(
+        project_id=project_id,
+        file_name=file.filename,
+        s3_key=file_path,
+        file_size=size,
+        mime_type=file.content_type,
+        document_type=DocumentType.OTHER
+    )
+    db.add(new_doc)
+
+    project.total_files_size += size
+
+    await db.commit()
+    await db.refresh(new_doc)
+
+    return new_doc
+
+
