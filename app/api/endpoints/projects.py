@@ -114,3 +114,31 @@ async def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project
+
+
+@router.delete("/{project_id}/recipes/{recipe_id}")
+async def remove_recipe_from_project(
+        project_id: int,
+        recipe_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user)
+):
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .options(selectinload(Project.recipes))
+    )
+    project = result.scalars().one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    recipe_to_remove = next((r for r in project.recipes if r.id == recipe_id), None)
+
+    if not recipe_to_remove:
+        raise HTTPException(status_code=404, detail="Recipe not found in this project's menu")
+
+    project.recipes.remove(recipe_to_remove)
+    await db.commit()
+
+    return {"message": "Danie usunięte z menu"}

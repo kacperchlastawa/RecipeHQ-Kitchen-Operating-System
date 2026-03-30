@@ -14,7 +14,6 @@ export default function ProjectDetailsPage() {
   const fetchProjectDetails = async () => {
     try {
       const token = localStorage.getItem("token");
-      // DODANO cache: 'no-store', aby wymusić pobranie świeżych danych z bazy
       const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}`, {
         headers: { "Authorization": `Bearer ${token}` },
         cache: 'no-store'
@@ -31,6 +30,29 @@ export default function ProjectDetailsPage() {
       console.error("Błąd sieci podczas pobierania szczegółów:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NOWA FUNKCJA: Usuwanie dania z projektu
+  const handleDeleteRecipe = async (recipeId: number) => {
+    if (!confirm("Czy na pewno chcesz usunąć to danie z menu?")) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}/recipes/${recipeId}`, {
+        method: 'DELETE',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        console.log("Danie usunięte pomyślnie.");
+        fetchProjectDetails(); // Odświeżamy listę
+      } else {
+        const errorData = await res.json();
+        alert(`Błąd podczas usuwania: ${errorData.detail || "Nieznany błąd"}`);
+      }
+    } catch (error) {
+      console.error("Błąd sieci przy usuwaniu:", error);
     }
   };
 
@@ -78,12 +100,26 @@ export default function ProjectDetailsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {project.recipes && project.recipes.length > 0 ? (
               project.recipes.map((recipe: any) => (
-                <div key={recipe.id} className="bg-white p-4 rounded-2xl border border-slate-200 flex gap-4 items-center shadow-sm hover:shadow-md transition-shadow">
+                <div
+                  key={recipe.id}
+                  className="group relative bg-white p-4 rounded-2xl border border-slate-200 flex gap-4 items-center shadow-sm hover:shadow-md transition-all"
+                >
+                  {/* PRZYCISK USUWANIA (X) */}
+                  <button
+                    onClick={() => handleDeleteRecipe(recipe.id)}
+                    className="absolute top-2 right-2 p-2 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-10 shadow-sm"
+                    title="Usuń z menu"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+
                   <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
                      <RecipeImage src={recipe.image_url} alt={recipe.title} />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-extrabold text-slate-800 text-lg uppercase">{recipe.title}</h4>
+                    <h4 className="font-extrabold text-slate-800 text-lg uppercase leading-tight">{recipe.title}</h4>
                     <p className="text-sm text-slate-400 line-clamp-2 mt-1">{recipe.description}</p>
                   </div>
                 </div>
