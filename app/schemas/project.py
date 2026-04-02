@@ -25,7 +25,7 @@ class ProjectResponse(ProjectBase):
     id: int
     total_files_size: int
     recipes: List[RecipeResponse] = []
-
+    recipes_count: int
     model_config = ConfigDict(from_attributes=True)
 
 

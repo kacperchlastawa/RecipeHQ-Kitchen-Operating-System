@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile,File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 import shutil
 import os
 from sqlalchemy.orm import selectinload
@@ -80,7 +80,7 @@ async def add_recipe_to_project(
         project_id: int,
         data: ProjectRecipeAdd,
         db: AsyncSession = Depends(get_db),
-        curret_user=Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
 
     result_proj = await db.execute(
@@ -101,8 +101,13 @@ async def add_recipe_to_project(
 
     if recipe not in project.recipes:
         project.recipes.append(recipe)
+        project.recipes_count += 1
         await db.commit()
-        return {"message": f"Recipe {recipe.title} successfully added to project {project.name}"}
+        await db.refresh(project)
+        return {
+            "message": f"Recipe {recipe.title} successfully added to project {project.name}",
+            "current_recipes_count": project.recipes_count
+        }
     else:
         return {"message": "Recipe already in project"}
 
@@ -222,6 +227,34 @@ async def upload_document(
 
     return new_doc
 
+
+@router.get("/{project_id}/shopping-list")
+async def get_raw_shopping_list(
+        project_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user)
+):
+
+    query = text("""
+        SELECT r.title, r.ingredients 
+        FROM recipes r
+        JOIN project_recipes pr ON r.id = pr.recipe_id
+        WHERE pr.project_id = :pid
+    """)
+
+    result = await db.execute(query, {"pid": project_id})
+    rows = result.fetchall()
+
+    shopping_list = [
+        {"recipe_name": row[0], "ingredients": row[1]}
+        for row in rows
+    ]
+
+    return {
+        "project_id": project_id,
+        "items_count": len(shopping_list),
+        "data": shopping_list
+    }
 
 
 

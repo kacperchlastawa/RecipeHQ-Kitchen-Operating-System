@@ -40,6 +40,7 @@ class Project(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     event_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     total_files_size: Mapped[int] = mapped_column(BigInteger, default=0)
+    recipes_count = Column(Integer, default=0, nullable=False)
 
     participants: Mapped[List["ProjectParticipant"]] = relationship(back_populates="project",cascade="all, delete-orphan")
     documents: Mapped[List["Document"]] = relationship(back_populates="project",cascade="all, delete-orphan")
