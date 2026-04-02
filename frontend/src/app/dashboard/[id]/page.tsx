@@ -13,12 +13,16 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const [shoppingList, setShoppingList] = useState<any>(null);
+  const [isListLoading, setIsListLoading] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
     }
   }, [router]);
+
   const fetchProjectDetails = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -29,7 +33,6 @@ export default function ProjectDetailsPage() {
 
       if (res.ok) {
         const data = await res.json();
-        console.log("Pobrano świeże dane projektu:", data);
         setProject(data);
       } else {
         console.error("Błąd pobierania:", res.status);
@@ -39,6 +42,34 @@ export default function ProjectDetailsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateShoppingList = async () => {
+    setIsListLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}/shopping-list`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setShoppingList(data);
+      }
+    } catch (error) {
+      console.error("Błąd listy zakupów:", error);
+    } finally {
+      setIsListLoading(false);
+    }
+  };
+
+  // FUNKCJA KOPIOWANIA - ZABEZPIECZONA PRZED NULL
+  const copyToClipboard = () => {
+    if (!shoppingList) return;
+    const text = shoppingList.data
+      .map((item: any) => `📍 ${item.dish.toUpperCase()}:\n${item.ingredients || "Brak podanych składników"}`)
+      .join('\n\n');
+    navigator.clipboard.writeText(text);
+    alert("Lista zakupów została skopiowana do schowka!");
   };
 
   const handleDeleteRecipe = async (recipeId: number) => {
@@ -59,7 +90,6 @@ export default function ProjectDetailsPage() {
     if (params.id) fetchProjectDetails();
   }, [params.id]);
 
-  // Funkcja pomocnicza do formatowania rozmiaru plików w nagłówku
   const formatTotalSize = (bytes: number) => {
     if (!bytes || bytes === 0) return "0 KB";
     return (bytes / 1024 / 1024).toFixed(2) + " MB";
@@ -75,7 +105,6 @@ export default function ProjectDetailsPage() {
           ← POWRÓT DO DASHBOARDU
         </Link>
 
-        {/* NAGŁÓWEK PROJEKTU */}
         <header className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200 mb-8">
           <div className="flex justify-between items-start">
             <div>
@@ -91,7 +120,6 @@ export default function ProjectDetailsPage() {
                    {project.event_date ? new Date(project.event_date).toLocaleDateString() : "TBD"}
                  </span>
               </div>
-              {/* WYŚWIETLAMY ZDENORMALIZOWANE DANE O ROZMIARZE PLIKÓW */}
               <div className="bg-slate-900 p-4 rounded-2xl text-center border border-slate-800 min-w-[100px]">
                  <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-tighter mb-1">Storage</span>
                  <span className="text-lg font-black text-orange-400 leading-none">
@@ -102,16 +130,25 @@ export default function ProjectDetailsPage() {
           </div>
         </header>
 
-        {/* SEKCJA MENU */}
         <section className="mb-12">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter">Menu Eventu</h2>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-black text-white px-6 py-3 rounded-xl text-xs font-black hover:bg-orange-600 transition-all shadow-lg active:scale-95 uppercase tracking-widest"
-            >
-              + DODAJ DANIE
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={generateShoppingList}
+                disabled={isListLoading}
+                className="bg-white text-black border-2 border-black px-6 py-3 rounded-xl text-xs font-black hover:bg-slate-100 transition-all shadow-md active:scale-95 uppercase tracking-widest disabled:opacity-50"
+              >
+                {isListLoading ? "Mielenie..." : "🛒 Lista Zakupów"}
+              </button>
+
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-black text-white px-6 py-3 rounded-xl text-xs font-black hover:bg-orange-600 transition-all shadow-lg active:scale-95 uppercase tracking-widest"
+              >
+                + DODAJ DANIE
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,7 +184,69 @@ export default function ProjectDetailsPage() {
           </div>
         </section>
 
-        {/* SEKCJA DOKUMENTACJI (NOWA!) */}
+        {shoppingList && (
+          <section className="mb-12 bg-white rounded-[2.5rem] p-8 shadow-2xl border-t-8 border-orange-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h2 className="text-2xl font-black italic uppercase tracking-tighter">Zestawienie Składników</h2>
+                <div className="flex gap-4 mt-2">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                    Wygenerowano dla {shoppingList.total_dishes} dań
+                  </p>
+                  <button
+                    onClick={copyToClipboard}
+                    className="text-[10px] font-black text-orange-500 hover:underline uppercase tracking-widest"
+                  >
+                    📋 Kopiuj listę
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => setShoppingList(null)}
+                className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              {shoppingList.data.map((item: any, idx: number) => {
+                // POPRAWKA: BEZPIECZNE SPLITOWANIE Z FALLBACKIEM
+            const ingredientsArray = String(item.ingredients || "")
+              .split(/[,\n]+/)
+              .filter((i: string) => i && i.trim() !== "");
+
+                return (
+                  <div key={idx} className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-orange-200 transition-all shadow-sm">
+                    <h4 className="text-orange-500 font-black text-xs uppercase mb-4 tracking-tight flex items-center gap-2">
+                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                      {item.dish}
+                    </h4>
+
+                    {ingredientsArray.length > 0 ? (
+                      <ul className="space-y-2">
+                        {ingredientsArray.map((ing: string, i: number) => (
+                          <li key={i} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 group-hover:border-orange-100 transition-all">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                            />
+                            <span className="text-sm font-semibold text-slate-700 capitalize">
+                              {ing.trim()}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">Brak podanych składników w recepturze.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <section className="mb-12">
           <DocumentManager
             projectId={params.id as string}
