@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation"; // Dodany import do nawigacji
+import { useRouter } from "next/navigation";
 import RecipeImage from "@/components/RecipeImage";
 import AddRecipeModal from "@/components/AddRecipeModal";
 
@@ -8,7 +8,8 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const router = useRouter(); // Inicjalizacja routera
+  const [recipeToEdit, setRecipeToEdit] = useState<any>(null); // Stan dla edytowanego przepisu
+  const router = useRouter();
 
   const fetchRecipes = async () => {
     try {
@@ -33,7 +34,7 @@ export default function RecipesPage() {
 
   // FUNKCJA USUWANIA
   const handleDelete = async (e: React.MouseEvent, id: number) => {
-    e.stopPropagation(); // Zatrzymuje kliknięcie, żeby nie wejść w szczegóły dania
+    e.stopPropagation();
     if (!confirm("Czy na pewno chcesz usunąć tę recepturę z bazy HQ?")) return;
 
     try {
@@ -44,13 +45,26 @@ export default function RecipesPage() {
       });
 
       if (res.ok) {
-        fetchRecipes(); // Odświeżamy listę po usunięciu
+        fetchRecipes();
       } else {
         alert("Błąd podczas usuwania.");
       }
     } catch (error) {
       console.error("Błąd sieci:", error);
     }
+  };
+
+  // FUNKCJA OTWIERANIA EDYCJI
+  const openEditModal = (e: React.MouseEvent, recipe: any) => {
+    e.stopPropagation();
+    setRecipeToEdit(recipe);
+    setIsModalOpen(true);
+  };
+
+  // ZAMYKANIE MODALA Z RESETEM STANU EDYCJI
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setRecipeToEdit(null);
   };
 
   useEffect(() => {
@@ -73,7 +87,10 @@ export default function RecipesPage() {
           </div>
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setRecipeToEdit(null); // Upewniamy się, że tryb to "Nowa"
+              setIsModalOpen(true);
+            }}
             className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
           >
             + NOWA RECEPTURA
@@ -85,18 +102,30 @@ export default function RecipesPage() {
             recipes.map((recipe: any) => (
               <div
                 key={recipe.id}
-                onClick={() => router.push(`/recipes/${recipe.id}`)} // Wejście w szczegóły
+                onClick={() => router.push(`/recipes/${recipe.id}`)}
                 className="group bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-2xl transition-all cursor-pointer relative"
               >
-                {/* PRZYCISK USUWANIA (Widoczny po hoverze) */}
-                <button
-                  onClick={(e) => handleDelete(e, recipe.id)}
-                  className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all shadow-md"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                {/* PRZYCISKI AKCJI (Widoczne po hoverze) */}
+                <div className="absolute top-4 left-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                  <button
+                    onClick={(e) => handleDelete(e, recipe.id)}
+                    className="bg-white/90 backdrop-blur-sm p-2 rounded-full text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-md"
+                    title="Usuń recepturę"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => openEditModal(e, recipe)}
+                    className="bg-white/90 backdrop-blur-sm p-2 rounded-full text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-md"
+                    title="Edytuj recepturę"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
 
                 <div className="h-48 w-full bg-slate-100 overflow-hidden relative">
                   <RecipeImage src={recipe.image_url} alt={recipe.title} />
@@ -136,8 +165,9 @@ export default function RecipesPage() {
 
       <AddRecipeModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         onRefresh={fetchRecipes}
+        initialData={recipeToEdit} // Przekazujemy dane do edycji
       />
     </main>
   );
