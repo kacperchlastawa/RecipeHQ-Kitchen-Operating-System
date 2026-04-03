@@ -46,7 +46,7 @@ async def create_recipe(
         owner_id=current_user.id,
         image_url=None
     )
-    # 3. Obsługa zdjęcia (jeśli zostało wysłane w tym samym zapytaniu)
+    # 3. Obsługa zdjęcia
     if file:
         if file.content_type not in ["image/jpeg", "image/png"]:
             raise HTTPException(status_code=400, detail="Nieprawidłowy format zdjęcia (tylko JPG/PNG)")
@@ -67,7 +67,24 @@ async def create_recipe(
     await db.refresh(new_recipe)
     return new_recipe
 
+#-----READ ONE
+@router.get("/{recipe_id}", response_model=RecipeResponse)
+async def read_recipe(
+        recipe_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """Pobiera szczegóły konkretnej receptury."""
+    result = await db.execute(select(Recipe).where(Recipe.id == recipe_id))
+    recipe = result.scalars().one_or_none()
 
+    if not recipe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receptura nie została znaleziona"
+        )
+
+    return recipe
 # --- READ ALL ---
 @router.get("/", response_model=List[RecipeResponse])
 async def read_recipes(
