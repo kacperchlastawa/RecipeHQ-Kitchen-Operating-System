@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font-awesome";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
   title: "RecipeHQ | Kitchen Operating System",
@@ -16,8 +14,6 @@ export default function RootLayout({
   return (
     <html lang="pl">
       <body className="antialiased bg-slate-50">
-        <Navbar />
-        {/* Tutaj będą renderowane wszystkie strony, np. page.tsx */}
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

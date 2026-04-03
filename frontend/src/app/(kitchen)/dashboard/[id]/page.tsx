@@ -211,7 +211,6 @@ export default function ProjectDetailsPage() {
 
             <div className="grid gap-6 md:grid-cols-2">
               {shoppingList.data.map((item: any, idx: number) => {
-                // POPRAWKA: BEZPIECZNE SPLITOWANIE Z FALLBACKIEM
             const ingredientsArray = String(item.ingredients || "")
               .split(/[,\n]+/)
               .filter((i: string) => i && i.trim() !== "");
