@@ -10,9 +10,10 @@ class Base(DeclarativeBase):
 
 class UserRole(str, enum.Enum):
     OWNER = "owner"
-    PARTICIPANT = "participant"
+    COOK = "cook"
+    DIETICIAN = "dietician"
+    VIEWER = "viewer"
 
-# --- TABELA ŁĄCZĄCA: Projekty <-> Receptury (Many-to-Many) ---
 project_recipes = Table(
     "project_recipes",
     Base.metadata,
@@ -59,7 +60,7 @@ class ProjectParticipant(Base):
 
     role: Mapped[UserRole] = mapped_column(
         SqlEnum(UserRole),
-        default=UserRole.PARTICIPANT,
+        default=UserRole.VIEWER,
         nullable=False
     )
     user: Mapped[User] = relationship(back_populates="project_memberships")

@@ -1,17 +1,22 @@
 import uuid
 import json
-from typing import List,Optional
+from typing import List,Optional, Set
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.s3 import s3_service
-from app.db.models import User, Recipe
+from app.db.models import User, Recipe, UserRole, ProjectParticipant, project_recipes
 from app.db.session import get_db
 from app.schemas.recipe import RecipeCreate, RecipeResponse, RecipeUpdate
 
 router = APIRouter()
-
+ROLE_PERMISSIONS = {
+    UserRole.OWNER: {"title", "description", "cooking_time", "difficulty", "kcal", "ingredients", "allergens", "file"},
+    UserRole.DIETICIAN: {"kcal", "allergens", "file"},
+    UserRole.COOK: {"title", "description", "cooking_time", "difficulty", "ingredients", "file"},
+    UserRole.VIEWER: set()
+}
 
 # --- CREATE ---
 @router.post("/", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
@@ -21,12 +26,17 @@ async def create_recipe(
         cooking_time: int = Form(30),
         difficulty: str = Form("Medium"),
         kcal: int = Form(500),
-        ingredients: str = Form("[]"),  # Odbieramy jako string JSON
-        allergens: str = Form("[]"),    # Odbieramy jako string JSON
+        ingredients: str = Form("[]"),
+        allergens: str = Form("[]"),
         file: Optional[UploadFile] = File(None),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    if current_user.global_role not in [UserRole.OWNER, UserRole.COOK]:
+        raise HTTPException(
+            status_code=403,
+            detail="Your role can not let you create new recipes"
+        )
     try:
         ingredients_list = json.loads(ingredients)
         allergens_list = json.loads(allergens)
@@ -96,7 +106,6 @@ async def read_recipes(
     return result.scalars().all()
 
 
-# --- UPDATE ---
 @router.patch("/{recipe_id}", response_model=RecipeResponse)
 async def update_recipe(
         recipe_id: int,
@@ -111,43 +120,79 @@ async def update_recipe(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(select(Recipe).where(Recipe.id == recipe_id))
-    recipe = result.scalars().one_or_none()
+    # 2. Pobieramy recepturę oraz ROLE użytkownika w powiązanych projektach (Jeden SQL Join!)
+    stmt = (
+        select(Recipe, ProjectParticipant.role)
+        .outerjoin(project_recipes, Recipe.id == project_recipes.c.recipe_id)
+        .outerjoin(ProjectParticipant, (project_recipes.c.project_id == ProjectParticipant.project_id) &
+                   (ProjectParticipant.user_id == current_user.id))
+        .where(Recipe.id == recipe_id)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
 
-    if not recipe:
-        raise HTTPException(status_code=404, detail="Recipe not found")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Receptura nie istnieje")
 
-    if recipe.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="It is not your recipe. You can not edit it"
-        )
+    recipe = rows[0][0]
 
-    if title is not None: recipe.title = title
-    if description is not None: recipe.description = description
-    if cooking_time is not None: recipe.cooking_time = cooking_time
-    if kcal is not None: recipe.kcal = kcal
-    if difficulty is not None: recipe.difficulty = difficulty
+    # 3. Ustalamy sumaryczne uprawnienia użytkownika
+    user_roles = {row[1] for row in rows if row[1]}
 
-    if ingredients is not None:
-        recipe.ingredients = json.loads(ingredients)
-    if allergens is not None:
-        recipe.allergens = json.loads(allergens)
+    if recipe.owner_id == current_user.id:
+        user_roles.add(UserRole.OWNER)
 
-    if file:
-        unique_filename = f"{recipe_id}_{uuid.uuid4().hex}.jpg"
-        file_content = await file.read()
-        image_url = await s3_service.upload_recipe_image(
-            file_content=file_content,
-            file_name=unique_filename,
-            content_type=file.content_type
-        )
-        recipe.image_url = image_url
+    allowed_fields: Set[str] = set()
+    for role in user_roles:
+        allowed_fields.update(ROLE_PERMISSIONS.get(role, set()))
+
+    if not allowed_fields:
+        raise HTTPException(status_code=403, detail="Brak uprawnień do edycji tej receptury")
+
+    # 4. Mapujemy przychodzące dane i sprawdzamy uprawnienia dla każdego pola
+    incoming_updates = {
+        "title": title,
+        "description": description,
+        "cooking_time": cooking_time,
+        "difficulty": difficulty,
+        "kcal": kcal,
+        "ingredients": ingredients,
+        "allergens": allergens,
+        "file": file
+    }
+
+    updated = False
+    for field, value in incoming_updates.items():
+        if value is not None:
+            if field not in allowed_fields:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Twoja rola nie pozwala na edycję pola: {field}"
+                )
+
+            if field in ["ingredients", "allergens"]:
+                setattr(recipe, field, json.loads(value))
+            elif field == "file":
+                # Obsługa zdjęcia przez S3
+                unique_filename = f"{recipe_id}_{uuid.uuid4().hex}.jpg"
+                file_content = await value.read()
+                image_url = await s3_service.upload_recipe_image(
+                    file_content=file_content,
+                    file_name=unique_filename,
+                    content_type=value.content_type
+                )
+                recipe.image_url = image_url
+            else:
+                setattr(recipe, field, value)
+
+            updated = True
+
+    if not updated:
+        raise HTTPException(status_code=400, detail="Nie przesłano żadnych danych do aktualizacji")
 
     await db.commit()
     await db.refresh(recipe)
     return recipe
-
 
 # --- DELETE ---
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -207,3 +252,6 @@ async def upload_recipe_image(
     await db.commit()
     await db.refresh(recipe)
     return recipe
+
+
+

@@ -5,23 +5,35 @@ import Link from "next/link";
 import RecipeImage from "@/components/RecipeImage";
 import AddRecipeToProjectModal from "@/components/AddRecipeToProjectModal";
 import DocumentManager from "@/components/DocumentManager";
+import InviteMember from "@/components/InviteMember"; // Importujemy nowy komponent
 
 export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const [project, setProject] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>("viewer"); // Domyślnie Viewer
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [shoppingList, setShoppingList] = useState<any>(null);
   const [isListLoading, setIsListLoading] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
+  // 1. FUNKCJA POBIERANIA ROLI UŻYTKOWNIKA W PROJEKCIE
+  const fetchUserRole = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      // Ten endpoint musimy mieć na backendzie (zrobimy go w następnym kroku)
+      const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}/my-role`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserRole(data.role); // Np. "owner", "cook", "dietician"
+      }
+    } catch (error) {
+      console.error("Błąd pobierania roli:", error);
     }
-  }, [router]);
+  };
 
   const fetchProjectDetails = async () => {
     try {
@@ -34,8 +46,6 @@ export default function ProjectDetailsPage() {
       if (res.ok) {
         const data = await res.json();
         setProject(data);
-      } else {
-        console.error("Błąd pobierania:", res.status);
       }
     } catch (error) {
       console.error("Błąd sieci:", error);
@@ -44,33 +54,17 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  const generateShoppingList = async () => {
-    setIsListLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}/shopping-list`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setShoppingList(data);
-      }
-    } catch (error) {
-      console.error("Błąd listy zakupów:", error);
-    } finally {
-      setIsListLoading(false);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
     }
-  };
-
-  // FUNKCJA KOPIOWANIA - ZABEZPIECZONA PRZED NULL
-  const copyToClipboard = () => {
-    if (!shoppingList) return;
-    const text = shoppingList.data
-      .map((item: any) => `📍 ${item.dish.toUpperCase()}:\n${item.ingredients || "Brak podanych składników"}`)
-      .join('\n\n');
-    navigator.clipboard.writeText(text);
-    alert("Lista zakupów została skopiowana do schowka!");
-  };
+    if (params.id) {
+      fetchProjectDetails();
+      fetchUserRole(); // Pobieramy rolę przy wejściu na stronę
+    }
+  }, [params.id, router]);
 
   const handleDeleteRecipe = async (recipeId: number) => {
     if (!confirm("Czy na pewno chcesz usunąć to danie z menu?")) return;
@@ -86,173 +80,120 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  useEffect(() => {
-    if (params.id) fetchProjectDetails();
-  }, [params.id]);
+  // Logika widoczności przycisków
+  const isChefOrOwner = userRole === "owner" || userRole === "cook";
+  const isOwner = userRole === "owner";
 
-  const formatTotalSize = (bytes: number) => {
-    if (!bytes || bytes === 0) return "0 KB";
-    return (bytes / 1024 / 1024).toFixed(2) + " MB";
-  };
-
-  if (loading) return <div className="p-10 text-center text-slate-500 font-bold uppercase tracking-widest">Wczytywanie planu eventu...</div>;
-  if (!project) return <div className="p-10 text-center text-red-500 font-bold">Nie znaleziono projektu.</div>;
+  if (loading) return <div className="p-10 text-center text-slate-500 font-bold uppercase tracking-widest animate-pulse">Autoryzacja w kuchni...</div>;
+  if (!project) return <div className="p-10 text-center text-red-500 font-bold">Brak dostępu do projektu.</div>;
 
   return (
     <main className="p-8 bg-slate-50 min-h-screen">
-      <div className="max-w-5xl mx-auto">
-        <Link href="/dashboard" className="text-orange-600 font-bold text-sm hover:underline mb-6 block uppercase tracking-tight">
-          ← POWRÓT DO DASHBOARDU
-        </Link>
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        <header className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200 mb-8">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-500 bg-orange-50 px-3 py-1 rounded-full">System Operacyjny Kuchni</span>
-              <h1 className="text-4xl font-black text-slate-900 mt-4 leading-none">{project.name}</h1>
-              <p className="text-slate-500 mt-4 max-w-2xl font-medium">{project.description}</p>
-            </div>
+        {/* LEWA KOLUMNA (Główna treść) */}
+        <div className="lg:col-span-2">
+          <Link href="/dashboard" className="text-orange-600 font-black text-[10px] hover:underline mb-8 block uppercase tracking-[0.2em]">
+            ← BACK TO SYSTEM DASHBOARD
+          </Link>
 
-            <div className="flex gap-3">
-              <div className="bg-slate-50 p-4 rounded-2xl text-center border border-slate-100 min-w-[100px]">
-                 <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Data Eventu</span>
-                 <span className="text-lg font-black text-slate-700 leading-none">
-                   {project.event_date ? new Date(project.event_date).toLocaleDateString() : "TBD"}
-                 </span>
-              </div>
-              <div className="bg-slate-900 p-4 rounded-2xl text-center border border-slate-800 min-w-[100px]">
-                 <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-tighter mb-1">Storage</span>
-                 <span className="text-lg font-black text-orange-400 leading-none">
-                   {formatTotalSize(project.total_files_size)}
-                 </span>
+          <header className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-200 mb-12">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white bg-slate-900 px-4 py-1.5 rounded-full">
+                    Rola: {userRole}
+                  </span>
+                  {project.event_date && (
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 bg-orange-50 px-4 py-1.5 rounded-full border border-orange-100">
+                      📅 {new Date(project.event_date).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-5xl font-black text-slate-900 leading-none tracking-tighter italic uppercase">{project.name}</h1>
+                <p className="text-slate-400 mt-6 max-w-xl font-medium leading-relaxed">{project.description}</p>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <section className="mb-12">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter">Menu Eventu</h2>
-            <div className="flex gap-3">
-              <button
-                onClick={generateShoppingList}
-                disabled={isListLoading}
-                className="bg-white text-black border-2 border-black px-6 py-3 rounded-xl text-xs font-black hover:bg-slate-100 transition-all shadow-md active:scale-95 uppercase tracking-widest disabled:opacity-50"
-              >
-                {isListLoading ? "Mielenie..." : "🛒 Lista Zakupów"}
-              </button>
+          <section className="mb-12">
+            <div className="flex justify-between items-end mb-8">
+              <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">Karta Menu</h2>
 
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="bg-black text-white px-6 py-3 rounded-xl text-xs font-black hover:bg-orange-600 transition-all shadow-lg active:scale-95 uppercase tracking-widest"
-              >
-                + DODAJ DANIE
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {project.recipes && project.recipes.length > 0 ? (
-              project.recipes.map((recipe: any) => (
-                <div
-                  key={recipe.id}
-                  className="group relative bg-white p-4 rounded-2xl border border-slate-200 flex gap-4 items-center shadow-sm hover:shadow-md transition-all"
-                >
+              {/* Przyciski akcji - ukryte dla Viewera */}
+              {userRole !== "viewer" && (
+                <div className="flex gap-3">
                   <button
-                    onClick={() => handleDeleteRecipe(recipe.id)}
-                    className="absolute -top-2 -right-2 p-2 bg-white text-red-500 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-10 shadow-lg border border-red-100"
+                    onClick={() => setIsModalOpen(true)}
+                    className="bg-black text-white px-8 py-4 rounded-2xl text-[10px] font-black hover:bg-orange-600 transition-all shadow-xl uppercase tracking-widest active:scale-95"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    + DODAJ DANIE
                   </button>
+                </div>
+              )}
+            </div>
 
-                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {project.recipes?.map((recipe: any) => (
+                <div key={recipe.id} className="group relative bg-white p-6 rounded-[2.5rem] border border-slate-200 flex gap-6 items-center shadow-sm hover:border-orange-500 transition-all">
+
+                  {/* Przycisk usuwania tylko dla Ownera */}
+                  {isOwner && (
+                    <button
+                      onClick={() => handleDeleteRecipe(recipe.id)}
+                      className="absolute -top-2 -right-2 p-3 bg-white text-red-500 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-20 shadow-xl border border-red-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+
+                  <div className="w-24 h-24 rounded-3xl overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-100 shadow-inner">
                      <RecipeImage src={recipe.image_url} alt={recipe.title} />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-black text-slate-800 text-base uppercase leading-tight">{recipe.title}</h4>
-                    <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 font-medium">{recipe.description}</p>
+                    <h4 className="font-black text-slate-800 text-lg uppercase italic leading-none mb-2">{recipe.title}</h4>
+                    <p className="text-[11px] text-slate-400 line-clamp-2 font-bold uppercase tracking-tight">{recipe.difficulty} • {recipe.cooking_time} MIN</p>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="col-span-full p-12 text-center border-2 border-dashed border-slate-200 rounded-[2.5rem] text-slate-400 font-bold uppercase text-xs tracking-widest bg-white/50">
-                Menu jest puste.
-              </div>
-            )}
-          </div>
-        </section>
-
-        {shoppingList && (
-          <section className="mb-12 bg-white rounded-[2.5rem] p-8 shadow-2xl border-t-8 border-orange-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex justify-between items-start mb-8">
-              <div>
-                <h2 className="text-2xl font-black italic uppercase tracking-tighter">Zestawienie Składników</h2>
-                <div className="flex gap-4 mt-2">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                    Wygenerowano dla {shoppingList.total_dishes} dań
-                  </p>
-                  <button
-                    onClick={copyToClipboard}
-                    className="text-[10px] font-black text-orange-500 hover:underline uppercase tracking-widest"
-                  >
-                    📋 Kopiuj listę
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={() => setShoppingList(null)}
-                className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors font-bold"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              {shoppingList.data.map((item: any, idx: number) => {
-            const ingredientsArray = String(item.ingredients || "")
-              .split(/[,\n]+/)
-              .filter((i: string) => i && i.trim() !== "");
-
-                return (
-                  <div key={idx} className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-orange-200 transition-all shadow-sm">
-                    <h4 className="text-orange-500 font-black text-xs uppercase mb-4 tracking-tight flex items-center gap-2">
-                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                      {item.dish}
-                    </h4>
-
-                    {ingredientsArray.length > 0 ? (
-                      <ul className="space-y-2">
-                        {ingredientsArray.map((ing: string, i: number) => (
-                          <li key={i} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 group-hover:border-orange-100 transition-all">
-                            <input
-                              type="checkbox"
-                              className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
-                            />
-                            <span className="text-sm font-semibold text-slate-700 capitalize">
-                              {ing.trim()}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-[11px] text-slate-400 italic">Brak podanych składników w recepturze.</p>
-                    )}
-                  </div>
-                );
-              })}
+              ))}
             </div>
           </section>
-        )}
 
-        <section className="mb-12">
-          <DocumentManager
-            projectId={params.id as string}
-            documents={project.documents || []}
-            onRefresh={fetchProjectDetails}
-          />
-        </section>
+          {/* Menadżer dokumentów */}
+          <section className="mb-12">
+            <DocumentManager
+              projectId={params.id as string}
+              documents={project.documents || []}
+              onRefresh={fetchProjectDetails}
+            />
+          </section>
+        </div>
+
+        {/* PRAWA KOLUMNA (Narzędzia i Zespół) */}
+        <div className="space-y-8">
+
+          {/* Komponent zapraszania - widoczny TYLKO DLA OWNERA */}
+          {isOwner && (
+            <InviteMember projectId={params.id as string} />
+          )}
+
+          {/* Widget Statystyk / Listy Zakupów */}
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
+              Operacje Kuchenne
+            </h3>
+            <button
+              onClick={() => router.push(`${params.id}/shopping-list`)}
+              className="w-full bg-slate-50 text-slate-800 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all flex items-center justify-between group"
+            >
+              🛒 Lista Zakupów
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {isModalOpen && (
