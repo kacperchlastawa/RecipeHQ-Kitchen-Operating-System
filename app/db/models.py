@@ -21,11 +21,13 @@ project_recipes = Table(
     Column("recipe_id", Integer, ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True),
 )
 
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
-    login: Mapped[str] = mapped_column(String(50), unique = True, index=True)
+    login: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
+    global_role: Mapped[UserRole] = mapped_column(SqlEnum(UserRole), default=UserRole.VIEWER, nullable=False)
 
     project_memberships: Mapped[List["ProjectParticipant"]] = relationship(back_populates="user")
     recipes: Mapped[List["Recipe"]] = relationship("Recipe", back_populates="owner", cascade="all, delete-orphan")
