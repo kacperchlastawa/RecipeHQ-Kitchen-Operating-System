@@ -1,17 +1,36 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import RecipeImage from "@/components/RecipeImage";
 import AddRecipeModal from "@/components/AddRecipeModal";
-
+import { UserRole } from "@/types/auth";
 export default function RecipesPage() {
   const [recipes, setRecipes] = useState([]);
+  const [userRole, setUserRole] = useState<UserRole>("viewer");
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [recipeToEdit, setRecipeToEdit] = useState<any>(null); // Stan dla edytowanego przepisu
+  const [recipeToEdit, setRecipeToEdit] = useState<any>(null);
   const router = useRouter();
 
-  const fetchRecipes = async () => {
+  // 2. POBIERANIE ROLI GLOBALNEJ
+  const fetchUserInfo = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await fetch("http://localhost:8000/api/v1/me", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserRole(data.global_role);
+      }
+    } catch (error) {
+      console.error("Błąd pobierania danych użytkownika:", error);
+    }
+  }, []);
+
+  const fetchRecipes = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("http://localhost:8000/api/v1/recipes/", {
@@ -30,9 +49,8 @@ export default function RecipesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // FUNKCJA USUWANIA
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     if (!confirm("Czy na pewno chcesz usunąć tę recepturę z bazy HQ?")) return;
@@ -54,22 +72,29 @@ export default function RecipesPage() {
     }
   };
 
-  // FUNKCJA OTWIERANIA EDYCJI
   const openEditModal = (e: React.MouseEvent, recipe: any) => {
     e.stopPropagation();
     setRecipeToEdit(recipe);
     setIsModalOpen(true);
   };
 
-  // ZAMYKANIE MODALA Z RESETEM STANU EDYCJI
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setRecipeToEdit(null);
   };
 
   useEffect(() => {
-    fetchRecipes();
-  }, []);
+    const initPage = async () => {
+      await fetchUserInfo();
+      await fetchRecipes();
+    };
+    initPage();
+  }, [fetchUserInfo, fetchRecipes]);
+
+  // 3. LOGIKA UPRAWNIEŃ DLA BAZY RECEPTUR
+  const isOwner = userRole === "owner";
+  const canAddRecipe = userRole === "owner" || userRole === "cook";
+  const canEditRecipe = userRole !== "viewer"; // Dietetyk też może edytować (modal zablokuje mu resztę pól)
 
   if (loading) return (
     <div className="p-10 text-center font-black text-slate-400 uppercase tracking-widest animate-pulse">
@@ -82,19 +107,27 @@ export default function RecipesPage() {
       <div className="max-w-7xl mx-auto">
         <header className="flex justify-between items-end mb-10">
           <div>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tighter italic uppercase">Baza Receptur</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-4xl font-black text-gray-900 tracking-tighter italic uppercase">Baza Receptur</h1>
+              <span className="bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                Rola: {userRole}
+              </span>
+            </div>
             <p className="text-gray-500 mt-2 font-bold uppercase text-[10px] tracking-[0.2em]">Twoja biblioteka wiedzy kulinarnej</p>
           </div>
 
-          <button
-            onClick={() => {
-              setRecipeToEdit(null); // Upewniamy się, że tryb to "Nowa"
-              setIsModalOpen(true);
-            }}
-            className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
-          >
-            + NOWA RECEPTURA
-          </button>
+          {/* NOWA RECEPTURA - Widoczna tylko dla Ownera i Kucharza */}
+          {canAddRecipe && (
+            <button
+              onClick={() => {
+                setRecipeToEdit(null);
+                setIsModalOpen(true);
+              }}
+              className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+            >
+              + NOWA RECEPTURA
+            </button>
+          )}
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
@@ -105,26 +138,34 @@ export default function RecipesPage() {
                 onClick={() => router.push(`/recipes/${recipe.id}`)}
                 className="group bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-2xl transition-all cursor-pointer relative"
               >
-                {/* PRZYCISKI AKCJI (Widoczne po hoverze) */}
+                {/* PRZYCISKI AKCJI */}
                 <div className="absolute top-4 left-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                  <button
-                    onClick={(e) => handleDelete(e, recipe.id)}
-                    className="bg-white/90 backdrop-blur-sm p-2 rounded-full text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-md"
-                    title="Usuń recepturę"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => openEditModal(e, recipe)}
-                    className="bg-white/90 backdrop-blur-sm p-2 rounded-full text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-md"
-                    title="Edytuj recepturę"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
+
+                  {/* USUWANIE - Tylko dla Ownera */}
+                  {isOwner && (
+                    <button
+                      onClick={(e) => handleDelete(e, recipe.id)}
+                      className="bg-white/90 backdrop-blur-sm p-2 rounded-full text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-md"
+                      title="Usuń recepturę"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {/* EDYCJA - Szef, Kucharz i Dietetyk */}
+                  {canEditRecipe && (
+                    <button
+                      onClick={(e) => openEditModal(e, recipe)}
+                      className="bg-white/90 backdrop-blur-sm p-2 rounded-full text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-md"
+                      title="Edytuj recepturę"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 <div className="h-48 w-full bg-slate-100 overflow-hidden relative">
@@ -167,7 +208,8 @@ export default function RecipesPage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onRefresh={fetchRecipes}
-        initialData={recipeToEdit} // Przekazujemy dane do edycji
+        initialData={recipeToEdit}
+        userRole={userRole} // 4. KLUCZOWE: Przekazujemy rolę do modala!
       />
     </main>
   );

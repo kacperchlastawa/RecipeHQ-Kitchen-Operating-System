@@ -1,14 +1,14 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectCard from "@/components/ProjectCard";
 import { Project } from "@/types/project";
 import AddProjectModal from "@/components/AddProjectModal";
-
+import { UserRole } from "@/types/auth"; // Dodaj import
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [userRole, setUserRole] = useState<string | null>(null); // Przechowuje rolę: owner, cook, dietician
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const router = useRouter();
@@ -22,8 +22,8 @@ export default function DashboardPage() {
     }
 
     try {
-      // Zakładamy, że masz endpoint /users/me, który zwraca dane zalogowanego użytkownika
-      const res = await fetch("http://localhost:8000/api/v1/users/me", {
+      // POPRAWKA: Zmiana adresu z /users/me na /me (zgodnie z backendem)
+      const res = await fetch("http://localhost:8000/api/v1/me", {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {

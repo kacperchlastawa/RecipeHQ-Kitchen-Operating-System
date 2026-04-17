@@ -2,11 +2,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
+import { UserRole } from "@/types/auth";
 export default function RegisterPage() {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [passwordRepeat, setPasswordRepeat] = useState(""); // NOWE POLE
+  const [passwordRepeat, setPasswordRepeat] = useState("");
+  const [role, setRole] = useState<UserRole>("cook");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -18,20 +19,21 @@ export default function RegisterPage() {
       return;
     }
     if (password.length < 8) {
-    alert("Hasło musi mieć co najmniej 8 znaków!");
-    return;
-  }
+      alert("Hasło musi mieć co najmniej 8 znaków!");
+      return;
+    }
 
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/auth", {
+      const res = await fetch("http://localhost:8000/api/v1/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           login: login,
           password: password,
-          repeat_password: passwordRepeat // Zgodnie ze Swaggerem
+          repeat_password: passwordRepeat,
+          global_role: role // 2. WYSYŁAMY ROLĘ DO BACKENDU
         }),
       });
 
@@ -52,7 +54,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
       <form onSubmit={handleRegister} className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-md border-t-8 border-orange-500">
-        <h1 className="text-3xl font-black text-slate-900 mb-2 uppercase italic">Nowy Kucharz</h1>
+        <h1 className="text-3xl font-black text-slate-900 mb-2 uppercase italic">Nowy Członek Zespołu</h1>
         <p className="text-slate-400 mb-8 font-bold text-xs uppercase tracking-widest">Załóż konto w Kitchen OS</p>
 
         <div className="space-y-4">
@@ -66,12 +68,28 @@ export default function RegisterPage() {
             className="w-full p-4 bg-slate-100 rounded-2xl border-none outline-none font-medium"
             value={password} onChange={(e) => setPassword(e.target.value)} required
           />
-          {/* NOWE POLE W UI */}
           <input
             type="password" placeholder="Powtórz hasło"
             className="w-full p-4 bg-slate-100 rounded-2xl border-none outline-none font-medium"
             value={passwordRepeat} onChange={(e) => setPasswordRepeat(e.target.value)} required
           />
+
+          {/* 3. NOWE POLE W UI: Wybór roli */}
+          <div className="pt-2">
+            <label className="text-[10px] font-black uppercase text-orange-500 tracking-widest ml-4 mb-2 block italic">
+              Twoja Funkcja w Kuchni
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as UserRole)}
+              className="w-full p-4 bg-orange-50 text-orange-700 rounded-2xl border border-orange-100 outline-none font-black uppercase text-xs cursor-pointer appearance-none"
+            >
+              <option value="owner">Szef Kuchni (Owner)</option>
+              <option value="cook">Kucharz (Cook)</option>
+              <option value="dietician">Dietetyk (Dietician)</option>
+              <option value="viewer">Obserwator (Viewer)</option>
+            </select>
+          </div>
         </div>
 
         <button

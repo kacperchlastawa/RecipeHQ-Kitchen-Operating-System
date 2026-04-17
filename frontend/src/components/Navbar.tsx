@@ -2,10 +2,37 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
+  const [userRole, setUserRole] = useState<string>("Wczytywanie...");
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const res = await fetch('http://localhost:8000/api/v1/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setUserRole(data.global_role);
+        } else {
+          setUserRole("Nieznany");
+        }
+      } catch (error) {
+        console.error("Błąd pobierania roli do Navbara:", error);
+        setUserRole("Brak sieci");
+      }
+    };
+
+    fetchUserRole();
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -13,6 +40,16 @@ export default function Navbar() {
   };
 
   const isActive = (path: string) => pathname === path;
+
+  // Słownik tłumaczący rolę z bazy na elegancki tekst do interfejsu
+  const roleDisplayNames: Record<string, string> = {
+    owner: "Szef Kuchni",
+    cook: "Kucharz",
+    dietician: "Dietetyk",
+    viewer: "Obserwator"
+  };
+
+  const displayRole = roleDisplayNames[userRole] || userRole.toUpperCase();
 
   return (
     <nav className="bg-black text-white border-b border-white/10 sticky top-0 z-50 shadow-2xl">
@@ -57,7 +94,9 @@ export default function Navbar() {
           <div className="flex items-center gap-6">
             <div className="hidden sm:block text-right border-l border-white/10 pl-6">
               <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Status</p>
-              <p className="text-xs font-black text-white uppercase italic">Szef Kuchni</p>
+              <p className={`text-xs font-black uppercase italic ${userRole === 'owner' ? 'text-orange-500' : 'text-white'}`}>
+                {displayRole}
+              </p>
             </div>
 
             <button

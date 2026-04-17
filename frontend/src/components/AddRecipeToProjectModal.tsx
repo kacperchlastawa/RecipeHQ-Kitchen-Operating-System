@@ -1,15 +1,17 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { getRecipes } from '@/lib/api';
-
+import { UserRole } from "@/types/auth";
 export default function AddRecipeToProjectModal({
   projectId,
   onClose,
-  onAdded
+  onAdded,
+  userRole = "viewer" // 1. ODBIERAMY ROLĘ (domyślnie viewer dla bezpieczeństwa)
 }: {
   projectId: string,
   onClose: () => void,
-  onAdded: () => void
+  onAdded: () => void,
+  userRole?: UserRole // 2. DEFINIUJEMY JĄ W TYPACH
 }) {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,13 @@ export default function AddRecipeToProjectModal({
     });
   }, []);
 
-const handleAdd = async (recipeId: number) => {
+  const handleAdd = async (recipeId: number) => {
+    // 3. FRONT-ENDOWY STRAŻNIK: Podwójne zabezpieczenie
+    if (userRole === "dietician" || userRole === "viewer") {
+      alert("Brak uprawnień. Tylko Szef Kuchni i Kucharz mogą modyfikować menu.");
+      return;
+    }
+
     const token = localStorage.getItem("token");
     console.log("Próba dodania przepisu:", recipeId);
 
@@ -37,7 +45,6 @@ const handleAdd = async (recipeId: number) => {
 
       if (res.ok) {
         console.log("Serwer potwierdził dodanie!");
-        // Zamykamy modal natychmiast, nie czekając na nic
         onAdded();
       } else {
         const errorData = await res.json();
@@ -45,10 +52,10 @@ const handleAdd = async (recipeId: number) => {
       }
     } catch (error) {
       console.error("Błąd sieciowy:", error);
-      // Nawet przy błędzie sieciowym spróbujmy zamknąć modal
       onClose();
     }
   };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200">
@@ -68,12 +75,16 @@ const handleAdd = async (recipeId: number) => {
                 <span className="font-bold text-slate-700 group-hover:text-orange-600 transition-colors">
                   {recipe.title}
                 </span>
-                <button
-                  onClick={() => handleAdd(recipe.id)}
-                  className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-orange-600 hover:scale-105 transition-all active:scale-95"
-                >
-                  Dodaj +
-                </button>
+
+                {/* 4. Ukrywamy przycisk, jeśli ktoś nie ma uprawnień (choć i tak nie powinien tu wejść) */}
+                {(userRole === "owner" || userRole === "cook") && (
+                  <button
+                    onClick={() => handleAdd(recipe.id)}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-orange-600 hover:scale-105 transition-all active:scale-95"
+                  >
+                    Dodaj +
+                  </button>
+                )}
               </div>
             ))
           ) : (

@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
-
+import { UserRole } from "@/types/auth";
+// POPRAWIONY INTERFEJS
 interface Document {
   id: number;
-  file_name: str;
+  file_name: string;
+  s3_key: string;
   file_size: number;
   mime_type: string;
   upload_at: string;
@@ -12,15 +14,22 @@ interface Document {
 export default function DocumentManager({
   projectId,
   documents,
-  onRefresh
+  onRefresh,
+  userRole = "viewer"
 }: {
   projectId: string;
   documents: Document[];
   onRefresh: () => void;
+  userRole?: UserRole;
 }) {
   const [uploading, setUploading] = useState(false);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (userRole === "viewer") {
+      alert("Brak uprawnień do wgrywania dokumentacji.");
+      return;
+    }
+
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
@@ -61,10 +70,13 @@ export default function DocumentManager({
     <div className="mt-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-black text-slate-900 uppercase italic">Dokumentacja i Media</h2>
-        <label className={`cursor-pointer bg-orange-100 text-orange-600 px-6 py-3 rounded-xl text-sm font-bold hover:bg-orange-600 hover:text-white transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-          {uploading ? "WGRYWANIE..." : "+ DODAJ PLIK"}
-          <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-        </label>
+
+        {userRole !== "viewer" && (
+          <label className={`cursor-pointer bg-orange-100 text-orange-600 px-6 py-3 rounded-xl text-sm font-bold hover:bg-orange-600 hover:text-white transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            {uploading ? "WGRYWANIE..." : "+ DODAJ PLIK"}
+            <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+        )}
       </div>
 
       <div className="space-y-3">

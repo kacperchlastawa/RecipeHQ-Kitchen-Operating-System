@@ -1,41 +1,39 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import RecipeImage from "@/components/RecipeImage";
 import AddRecipeToProjectModal from "@/components/AddRecipeToProjectModal";
 import DocumentManager from "@/components/DocumentManager";
-import InviteMember from "@/components/InviteMember"; // Importujemy nowy komponent
-
+import InviteMember from "@/components/InviteMember";
+import { UserRole } from "@/types/auth";
 export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const [project, setProject] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("viewer"); // Domyślnie Viewer
+  const [userRole, setUserRole] = useState<UserRole>("viewer");
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [shoppingList, setShoppingList] = useState<any>(null);
-  const [isListLoading, setIsListLoading] = useState(false);
-
-  // 1. FUNKCJA POBIERANIA ROLI UŻYTKOWNIKA W PROJEKCIE
-  const fetchUserRole = async () => {
+  // 1. POBIERANIE ROLI GLOBALNEJ (zamiast roli z projektu)
+  const fetchUserInfo = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
-      // Ten endpoint musimy mieć na backendzie (zrobimy go w następnym kroku)
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}/my-role`, {
+      if (!token) return;
+
+      const res = await fetch("http://localhost:8000/api/v1/me", {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setUserRole(data.role); // Np. "owner", "cook", "dietician"
+        setUserRole(data.global_role); // Odczytujemy 'owner', 'cook' lub 'dietician'
       }
     } catch (error) {
-      console.error("Błąd pobierania roli:", error);
+      console.error("Błąd pobierania danych użytkownika:", error);
     }
-  };
+  }, []);
 
-  const fetchProjectDetails = async () => {
+  const fetchProjectDetails = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}`, {
@@ -52,7 +50,7 @@ export default function ProjectDetailsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -61,10 +59,10 @@ export default function ProjectDetailsPage() {
       return;
     }
     if (params.id) {
-      fetchProjectDetails();
-      fetchUserRole(); // Pobieramy rolę przy wejściu na stronę
+      fetchUserInfo(); // Najpierw pobieramy rolę
+      fetchProjectDetails(); // Potem projekt
     }
-  }, [params.id, router]);
+  }, [params.id, router, fetchUserInfo, fetchProjectDetails]);
 
   const handleDeleteRecipe = async (recipeId: number) => {
     if (!confirm("Czy na pewno chcesz usunąć to danie z menu?")) return;
@@ -80,9 +78,9 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  // Logika widoczności przycisków
-  const isChefOrOwner = userRole === "owner" || userRole === "cook";
+  // 2. LOGIKA WIDOCZNOŚCI PRZYCISKÓW
   const isOwner = userRole === "owner";
+  const canAddRecipe = userRole === "owner" || userRole === "cook";
 
   if (loading) return <div className="p-10 text-center text-slate-500 font-bold uppercase tracking-widest animate-pulse">Autoryzacja w kuchni...</div>;
   if (!project) return <div className="p-10 text-center text-red-500 font-bold">Brak dostępu do projektu.</div>;
@@ -120,8 +118,8 @@ export default function ProjectDetailsPage() {
             <div className="flex justify-between items-end mb-8">
               <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">Karta Menu</h2>
 
-              {/* Przyciski akcji - ukryte dla Viewera */}
-              {userRole !== "viewer" && (
+              {/* + DODAJ DANIE: Tylko Szef i Kucharz */}
+              {canAddRecipe && (
                 <div className="flex gap-3">
                   <button
                     onClick={() => setIsModalOpen(true)}
@@ -134,30 +132,36 @@ export default function ProjectDetailsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {project.recipes?.map((recipe: any) => (
-                <div key={recipe.id} className="group relative bg-white p-6 rounded-[2.5rem] border border-slate-200 flex gap-6 items-center shadow-sm hover:border-orange-500 transition-all">
+              {project.recipes?.length > 0 ? (
+                project.recipes.map((recipe: any) => (
+                  <div key={recipe.id} className="group relative bg-white p-6 rounded-[2.5rem] border border-slate-200 flex gap-6 items-center shadow-sm hover:border-orange-500 transition-all">
 
-                  {/* Przycisk usuwania tylko dla Ownera */}
-                  {isOwner && (
-                    <button
-                      onClick={() => handleDeleteRecipe(recipe.id)}
-                      className="absolute -top-2 -right-2 p-3 bg-white text-red-500 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-20 shadow-xl border border-red-50"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
+                    {/* USUWANIE DANIA: Tylko Szef */}
+                    {isOwner && (
+                      <button
+                        onClick={() => handleDeleteRecipe(recipe.id)}
+                        className="absolute -top-2 -right-2 p-3 bg-white text-red-500 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-20 shadow-xl border border-red-50"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
 
-                  <div className="w-24 h-24 rounded-3xl overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-100 shadow-inner">
-                     <RecipeImage src={recipe.image_url} alt={recipe.title} />
+                    <div className="w-24 h-24 rounded-3xl overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-100 shadow-inner">
+                       <RecipeImage src={recipe.image_url} alt={recipe.title} />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-black text-slate-800 text-lg uppercase italic leading-none mb-2">{recipe.title}</h4>
+                      <p className="text-[11px] text-slate-400 line-clamp-2 font-bold uppercase tracking-tight">{recipe.difficulty} • {recipe.cooking_time} MIN</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-black text-slate-800 text-lg uppercase italic leading-none mb-2">{recipe.title}</h4>
-                    <p className="text-[11px] text-slate-400 line-clamp-2 font-bold uppercase tracking-tight">{recipe.difficulty} • {recipe.cooking_time} MIN</p>
-                  </div>
+                ))
+              ) : (
+                <div className="col-span-full py-10 text-center border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400 font-bold text-xs uppercase">
+                  Brak dań w menu.
                 </div>
-              ))}
+              )}
             </div>
           </section>
 
@@ -174,7 +178,7 @@ export default function ProjectDetailsPage() {
         {/* PRAWA KOLUMNA (Narzędzia i Zespół) */}
         <div className="space-y-8">
 
-          {/* Komponent zapraszania - widoczny TYLKO DLA OWNERA */}
+          {/* ZAPRASZANIE: Tylko Szef */}
           {isOwner && (
             <InviteMember projectId={params.id as string} />
           )}
@@ -199,6 +203,7 @@ export default function ProjectDetailsPage() {
       {isModalOpen && (
         <AddRecipeToProjectModal
           projectId={params.id as string}
+          userRole={userRole} // 3. PRZEKAZUJEMY ROLĘ DO MODALA!
           onClose={() => setIsModalOpen(false)}
           onAdded={() => {
             fetchProjectDetails();

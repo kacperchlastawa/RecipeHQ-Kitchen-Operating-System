@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-
+import { UserRole } from "@/types/auth";
 interface AddRecipeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRefresh: () => void;
   initialData?: any;
-  userRole?: string; // Przyjmuje: 'owner', 'cook', 'dietician', 'viewer'
+  userRole: UserRole;
 }
 
 export default function AddRecipeModal({

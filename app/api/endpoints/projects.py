@@ -327,7 +327,7 @@ async def invite_user_to_project(
     await db.commit()
 
     return {
-        "message": f"Sukces! {user_login} dołączył do zespołu jako {role.value}.",
+        "message": f"Sukces! {user_login} dołączył do zespołu jako {role}.",
         "project": project.name
     }
 
