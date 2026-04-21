@@ -2,7 +2,21 @@
 import { useState } from "react";
 import { UserRole } from "@/types/auth";
 
-export default function InviteMember({ projectId }: { projectId: string }) {
+interface Participant {
+  id: number;
+  login: string;
+  role: string;
+}
+
+export default function InviteMember({
+  projectId,
+  participants,
+  onRefresh
+}: {
+  projectId: string,
+  participants: Participant[],
+  onRefresh: () => void
+}) {
   const [login, setLogin] = useState("");
   const [role, setRole] = useState<UserRole>("cook");
   const [loading, setLoading] = useState(false);
@@ -14,8 +28,6 @@ export default function InviteMember({ projectId }: { projectId: string }) {
     setMessage(null);
 
     const token = localStorage.getItem("token");
-
-    // 1. Używamy FormData zamiast JSON, aby uniknąć błędu 422
     const formData = new FormData();
     formData.append("user_login", login);
     formData.append("role", role);
@@ -23,50 +35,85 @@ export default function InviteMember({ projectId }: { projectId: string }) {
     try {
       const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/invite`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-          // Przy FormData NIE ustawiamy Content-Type ręcznie
-        },
+        headers: { "Authorization": `Bearer ${token}` },
         body: formData,
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage({ type: 'success', text: `Dodano użytkownika ${login} do zespołu.` });
+        setMessage({ type: 'success', text: `Dodano użytkownika ${login}.` });
         setLogin("");
+        onRefresh(); // Odświeżamy listę po dodaniu
       } else {
-        // 2. Fix dla błędu "Objects are not valid as a React child"
-        // Sprawdzamy czy detail to string. Jeśli to obiekt (błąd walidacji), wyciągamy sensowny komunikat.
-        let errorText = "Błąd zaproszenia";
-
-        if (typeof data.detail === "string") {
-          errorText = data.detail;
-        } else if (Array.isArray(data.detail)) {
-          // Jeśli FastAPI zwróci listę błędów walidacji
-          errorText = "Nieprawidłowe dane (sprawdź login i rolę)";
-        }
-
+        const errorText = typeof data.detail === "string" ? data.detail : "Błąd zaproszenia";
         setMessage({ type: 'error', text: errorText });
       }
     } catch (error) {
-      console.error("Błąd sieci:", error);
-      setMessage({ type: 'error', text: "Błąd połączenia z serwerem." });
+      setMessage({ type: 'error', text: "Błąd połączenia." });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleRemove = async (userId: number) => {
+    if (!confirm("Czy na pewno chcesz usunąć tego członka z brygady?")) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/participants/${userId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        onRefresh(); // Odświeżamy listę po usunięciu
+      } else {
+        alert("Błąd podczas usuwania użytkownika.");
+      }
+    } catch (error) {
+      console.error("Błąd usuwania:", error);
+    }
+  };
+
   return (
     <div className="bg-slate-900 p-6 rounded-[2rem] text-white shadow-xl border border-white/5">
-      <h3 className="text-xs font-black uppercase tracking-widest mb-4 italic text-orange-500">
+      <h3 className="text-xs font-black uppercase tracking-widest mb-6 italic text-orange-500">
         Zarządzaj Brygadą
       </h3>
+
+      {/* LISTA UCZESTNIKÓW */}
+      <div className="space-y-3 mb-8">
+        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Aktualny Skład:</p>
+        {participants.map((p) => (
+          <div key={p.id} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-white/10 transition-all">
+            <div className="flex flex-col">
+              <span className="text-xs font-black uppercase tracking-tight">{p.login}</span>
+              <span className="text-[9px] font-bold text-orange-500 uppercase">{p.role}</span>
+            </div>
+
+            {/* Nie pozwalamy usunąć samego siebie (Ownera) w tym widoku, jeśli role == OWNER */}
+            {p.role !== 'OWNER' && (
+              <button
+                onClick={() => handleRemove(p.id)}
+                className="opacity-0 group-hover:opacity-100 p-2 text-slate-500 hover:text-red-500 transition-all text-xs font-black"
+              >
+                USUŃ
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="h-px bg-white/10 mb-6" />
+
+      {/* FORMULARZ DODAWANIA */}
       <form onSubmit={handleInvite} className="space-y-3">
+        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em]">Dodaj do zespołu:</p>
         <input
           type="text"
           placeholder="Login użytkownika..."
-          className="w-full bg-white/10 p-4 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-500"
+          className="w-full bg-white/10 p-4 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-700"
           value={login}
           onChange={(e) => setLogin(e.target.value)}
           required
@@ -90,9 +137,8 @@ export default function InviteMember({ projectId }: { projectId: string }) {
         </div>
       </form>
 
-      {/* Wyświetlanie komunikatu - teraz bezpieczne, bo text to zawsze string */}
       {message && (
-        <p className={`mt-3 text-[10px] font-black uppercase animate-pulse ${message.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+        <p className={`mt-4 text-[10px] font-black uppercase ${message.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
           {message.text}
         </p>
       )}

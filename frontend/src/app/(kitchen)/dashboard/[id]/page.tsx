@@ -7,6 +7,7 @@ import AddRecipeToProjectModal from "@/components/AddRecipeToProjectModal";
 import DocumentManager from "@/components/DocumentManager";
 import InviteMember from "@/components/InviteMember";
 import { UserRole } from "@/types/auth";
+
 export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -15,7 +16,6 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 1. POBIERANIE ROLI GLOBALNEJ (zamiast roli z projektu)
   const fetchUserInfo = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
@@ -26,7 +26,7 @@ export default function ProjectDetailsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setUserRole(data.global_role); // Odczytujemy 'owner', 'cook' lub 'dietician'
+        setUserRole(data.global_role);
       }
     } catch (error) {
       console.error("Błąd pobierania danych użytkownika:", error);
@@ -59,8 +59,8 @@ export default function ProjectDetailsPage() {
       return;
     }
     if (params.id) {
-      fetchUserInfo(); // Najpierw pobieramy rolę
-      fetchProjectDetails(); // Potem projekt
+      fetchUserInfo();
+      fetchProjectDetails();
     }
   }, [params.id, router, fetchUserInfo, fetchProjectDetails]);
 
@@ -78,7 +78,6 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  // 2. LOGIKA WIDOCZNOŚCI PRZYCISKÓW
   const isOwner = userRole === "owner";
   const canAddRecipe = userRole === "owner" || userRole === "cook";
 
@@ -89,7 +88,6 @@ export default function ProjectDetailsPage() {
     <main className="p-8 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* LEWA KOLUMNA (Główna treść) */}
         <div className="lg:col-span-2">
           <Link href="/dashboard" className="text-orange-600 font-black text-[10px] hover:underline mb-8 block uppercase tracking-[0.2em]">
             ← BACK TO SYSTEM DASHBOARD
@@ -118,7 +116,6 @@ export default function ProjectDetailsPage() {
             <div className="flex justify-between items-end mb-8">
               <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">Karta Menu</h2>
 
-              {/* + DODAJ DANIE: Tylko Szef i Kucharz */}
               {canAddRecipe && (
                 <div className="flex gap-3">
                   <button
@@ -136,7 +133,6 @@ export default function ProjectDetailsPage() {
                 project.recipes.map((recipe: any) => (
                   <div key={recipe.id} className="group relative bg-white p-6 rounded-[2.5rem] border border-slate-200 flex gap-6 items-center shadow-sm hover:border-orange-500 transition-all">
 
-                    {/* USUWANIE DANIA: Tylko Szef */}
                     {isOwner && (
                       <button
                         onClick={() => handleDeleteRecipe(recipe.id)}
@@ -165,32 +161,33 @@ export default function ProjectDetailsPage() {
             </div>
           </section>
 
-          {/* Menadżer dokumentów */}
           <section className="mb-12">
             <DocumentManager
               projectId={params.id as string}
               documents={project.documents || []}
               onRefresh={fetchProjectDetails}
+              userRole={userRole} // FIX: Przekazujemy rolę do managera plików
             />
           </section>
         </div>
 
-        {/* PRAWA KOLUMNA (Narzędzia i Zespół) */}
         <div className="space-y-8">
-
-          {/* ZAPRASZANIE: Tylko Szef */}
+          {/* ZAPRASZANIE: Widoczne tylko dla Ownera */}
           {isOwner && (
-            <InviteMember projectId={params.id as string} />
+            <InviteMember
+              projectId={params.id as string}
+              participants={project.participants || []}
+              onRefresh={fetchProjectDetails}
+            />
           )}
 
-          {/* Widget Statystyk / Listy Zakupów */}
           <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
               Operacje Kuchenne
             </h3>
             <button
-              onClick={() => router.push(`${params.id}/shopping-list`)}
+              onClick={() => router.push(`/dashboard/${params.id}/shopping-list`)} // FIX: Bezwzględna ścieżka
               className="w-full bg-slate-50 text-slate-800 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all flex items-center justify-between group"
             >
               🛒 Lista Zakupów
@@ -203,7 +200,7 @@ export default function ProjectDetailsPage() {
       {isModalOpen && (
         <AddRecipeToProjectModal
           projectId={params.id as string}
-          userRole={userRole} // 3. PRZEKAZUJEMY ROLĘ DO MODALA!
+          userRole={userRole}
           onClose={() => setIsModalOpen(false)}
           onAdded={() => {
             fetchProjectDetails();

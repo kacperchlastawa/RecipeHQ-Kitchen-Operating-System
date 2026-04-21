@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile,File,Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select, text, delete, func
 import shutil
 import os
 from PIL import Image
 import io
 from sqlalchemy.orm import selectinload
 from app.db.session import get_db
-from app.db.models import Project,ProjectParticipant,UserRole,Recipe,User,DocumentType,Document
-from app.schemas.project import ProjectCreate,ProjectResponse,ProjectRecipeAdd
+from app.db.models import Project, ProjectParticipant, UserRole, Recipe, User, DocumentType, Document
+from app.schemas.project import ProjectCreate, ProjectResponse, ProjectRecipeAdd
 from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user, check_project_owner
 from typing import List
@@ -17,7 +17,7 @@ from typing import List
 router = APIRouter()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
+MAX_STORAGE_BYTES = 50 * 1024 * 1024  # 50 MB
 def optimize_image(file_content: bytes, filename: str):
     """Pomocnicza funkcja do konwersji na WebP i resize'u"""
     img = Image.open(io.BytesIO(file_content))
@@ -44,13 +44,11 @@ async def create_event(
     project_data = project_in.model_dump()
 
     if current_user.global_role != UserRole.OWNER:
-        raise HTTPException(status_code=403,
-                            derail = "Only Chef or Owner can create new project")
+        raise HTTPException(status_code=403,detail = "Only Chef or Owner can create new project")
 
     if project_data.get("event_date"):
         project_data["event_date"] = project_data["event_date"].replace(tzinfo=None)
 
-    # 1. Tworzymy obiekt projektu
     new_project = Project(
         **project_data,
         total_files_size=0
@@ -59,7 +57,6 @@ async def create_event(
     db.add(new_project)
     await db.commit()
 
-    # 2. Dodajemy twórcę jako OWNERA
     participant = ProjectParticipant(
         user_id=current_user.id,
         project_id=new_project.id,
@@ -72,7 +69,8 @@ async def create_event(
         .where(Project.id == new_project.id)
         .options(
             selectinload(Project.recipes),
-            selectinload(Project.documents)
+            selectinload(Project.documents),
+            selectinload(Project.participants).selectinload(ProjectParticipant.user)
         )
     )
     project_final = result.scalars().one()
@@ -124,18 +122,18 @@ async def list_projects(
         skip: int = 0,
         limit: int = 100
 ):
-    """Pobiera listę projektów kucharza RAZEM z przepisami (naprawia błąd 500)."""
 
     query = (
         select(Project)
         .join(ProjectParticipant)
         .where(ProjectParticipant.user_id == current_user.id)
-        .options(selectinload(Project.recipes),selectinload(Project.documents))
-        .offset(skip)
-        .limit(limit)
-        .distinct()
+        .options(
+            selectinload(Project.recipes),
+            selectinload(Project.documents),
+            selectinload(Project.participants).selectinload(ProjectParticipant.user)
+        )
+        .offset(skip).limit(limit).distinct()
     )
-
     result = await db.execute(query)
     projects = result.scalars().all()
 
@@ -147,7 +145,8 @@ async def get_project(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(select(Project).options(selectinload(Project.recipes),selectinload(Project.documents)).where(Project.id == project_id))
+    result = await db.execute(select(Project).options(selectinload(Project.recipes),selectinload(Project.documents),
+                                                      selectinload(Project.participants).selectinload(ProjectParticipant.user)).where(Project.id == project_id))
     project = result.scalars().one_or_none()
 
     if not project:
@@ -195,6 +194,12 @@ async def upload_document(
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.total_files_size > MAX_STORAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Brak miejsca w tym projekcie (Limit 50MB). Usuń stare pliki."
+        )
 
     content = await file.read()
     final_content = content
@@ -327,7 +332,33 @@ async def invite_user_to_project(
     await db.commit()
 
     return {
-        "message": f"Sukces! {user_login} dołączył do zespołu jako {role}.",
+        "message": f"Sukces! {user_login} dołączył do zespołu jako {clean_role}.",
         "project": project.name
     }
 
+@router.delete("/{project_id}/participants/{user_id}")
+async def remove_participant(
+    project_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Sprawdź czy current_user jest Ownerem projektu
+    owner_check = await db.execute(
+        select(ProjectParticipant).where(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == current_user.id,
+            ProjectParticipant.role == "OWNER"
+        )
+    )
+    if not owner_check.scalars().first():
+        raise HTTPException(status_code=403, detail="Tylko Szef Kuchni może usuwać członków brygady")
+
+    await db.execute(
+        delete(ProjectParticipant).where(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == user_id
+        )
+    )
+    await db.commit()
+    return {"message": "Użytkownik usunięty z projektu"}
