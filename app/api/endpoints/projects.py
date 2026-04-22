@@ -362,3 +362,35 @@ async def remove_participant(
     )
     await db.commit()
     return {"message": "Użytkownik usunięty z projektu"}
+
+
+@router.get("/reports/brigade-stats")
+async def get_brigade_stats(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    if current_user.global_role != UserRole.OWNER:
+        raise HTTPException(status_code=403, detail="Tylko Szef Kuchni ma dostęp do raportów operacyjnych.")
+
+    raw_sql = text("""
+                   SELECT u.login,
+                          u.global_role,
+                          COUNT(pp.project_id) as assigned_projects
+                   FROM users u
+                            LEFT JOIN project_participants pp ON u.id = pp.user_id
+                   GROUP BY u.login, u.global_role
+                   ORDER BY assigned_projects DESC
+                   """)
+
+    result = await db.execute(raw_sql)
+
+    stats = [
+        {
+            "login": row[0],
+            "role": row[1].value if hasattr(row[1], 'value') else row[1],
+            "projects_count": row[2]
+        }
+        for row in result.fetchall()
+    ]
+
+    return {"data": stats}

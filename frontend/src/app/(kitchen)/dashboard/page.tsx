@@ -1,12 +1,15 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import BrigadeReportModal from "@/components/BrigadeReportModal";
 import Link from "next/link";
 import ProjectCard from "@/components/ProjectCard";
 import { Project } from "@/types/project";
 import AddProjectModal from "@/components/AddProjectModal";
-import { UserRole } from "@/types/auth"; // Dodaj import
+import { UserRole } from "@/types/auth";
+
 export default function DashboardPage() {
+  const [showReport, setShowReport] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,13 +25,12 @@ export default function DashboardPage() {
     }
 
     try {
-      // POPRAWKA: Zmiana adresu z /users/me na /me (zgodnie z backendem)
       const res = await fetch("http://localhost:8000/api/v1/me", {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
         const userData = await res.json();
-        setUserRole(userData.global_role); // Pobieramy 'owner', 'cook' lub 'dietician'
+        setUserRole(userData.global_role);
       }
     } catch (error) {
       console.error("Błąd pobierania danych użytkownika:", error);
@@ -78,14 +80,24 @@ export default function DashboardPage() {
             <p className="text-gray-600">Aktywne projekty i eventy gastronomiczne</p>
           </div>
 
-          {/* PRZYCISK WIDOCZNY TYLKO DLA OWNERA */}
+          {/* SEKCJA NARZĘDZI (WIDOCZNA TYLKO DLA OWNERA) */}
           {userRole === 'owner' ? (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-black text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl active:scale-95"
-            >
-              + NOWY EVENT
-            </button>
+            <div className="flex gap-4">
+              {/* NOWY PRZYCISK RAPORTU SQL */}
+              <button
+                onClick={() => setShowReport(true)}
+                className="bg-white text-slate-800 border border-slate-200 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 hover:border-slate-300 transition-all shadow-sm active:scale-95 flex items-center gap-2"
+              >
+                <span className="text-sm">📊</span> RAPORT SQL
+              </button>
+
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-black text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl active:scale-95 flex items-center gap-2"
+              >
+                + NOWY EVENT
+              </button>
+            </div>
           ) : (
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-6 py-4 rounded-2xl border border-slate-200">
               Podgląd projektów
@@ -105,13 +117,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Komponent Modala - montowany tylko dla Ownera */}
+      {/* MODALE (ZAMONTOWANE TYLKO DLA OWNERA) */}
       {userRole === 'owner' && (
-        <AddProjectModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onRefresh={fetchProjects}
-        />
+        <>
+          <AddProjectModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onRefresh={fetchProjects}
+          />
+          {showReport && (
+            <BrigadeReportModal onClose={() => setShowReport(false)} />
+          )}
+        </>
       )}
     </main>
   );
