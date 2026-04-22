@@ -8,7 +8,7 @@ import io
 from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.db.models import Project, ProjectParticipant, UserRole, Recipe, User, DocumentType, Document
-from app.schemas.project import ProjectCreate, ProjectResponse, ProjectRecipeAdd
+from app.schemas.project import ProjectCreate, ProjectResponse, ProjectRecipeAdd, ProjectPublicResponse
 from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user, check_project_owner
 from typing import List
@@ -394,3 +394,22 @@ async def get_brigade_stats(
     ]
 
     return {"data": stats}
+
+
+@router.get("/{project_id}/public", response_model=ProjectPublicResponse)
+async def get_public_project(project_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Publiczny endpoint dla klientów i gości. Nie wymaga tokena JWT.
+    Zwraca tylko bezpieczne, okrojone dane (bez brygady i dokumentacji wewn.).
+    """
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.recipes))
+        .where(Project.id == project_id)
+    )
+    project = result.scalars().one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Menu nie zostało znalezione")
+
+    return project

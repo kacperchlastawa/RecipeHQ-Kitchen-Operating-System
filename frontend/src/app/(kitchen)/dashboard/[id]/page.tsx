@@ -78,6 +78,13 @@ export default function ProjectDetailsPage() {
     }
   };
 
+  // NOWA FUNKCJA: Kopiowanie publicznego linku
+  const handleCopyPublicLink = () => {
+    const url = `${window.location.origin}/public-menu/${params.id}`;
+    navigator.clipboard.writeText(url);
+    alert("Publiczny link dla klienta skopiowany do schowka! 🥂");
+  };
+
   const isOwner = userRole === "owner";
   const canAddRecipe = userRole === "owner" || userRole === "cook";
 
@@ -166,7 +173,7 @@ export default function ProjectDetailsPage() {
               projectId={params.id as string}
               documents={project.documents || []}
               onRefresh={fetchProjectDetails}
-              userRole={userRole} // FIX: Przekazujemy rolę do managera plików
+              userRole={userRole}
             />
           </section>
         </div>
@@ -186,13 +193,24 @@ export default function ProjectDetailsPage() {
               <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
               Operacje Kuchenne
             </h3>
+
             <button
-              onClick={() => router.push(`/dashboard/${params.id}/shopping-list`)} // FIX: Bezwzględna ścieżka
-              className="w-full bg-slate-50 text-slate-800 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all flex items-center justify-between group"
+              onClick={() => router.push(`/dashboard/${params.id}/shopping-list`)}
+              className="w-full bg-slate-50 text-slate-800 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center justify-between group"
             >
               🛒 Lista Zakupów
               <span className="group-hover:translate-x-1 transition-transform">→</span>
             </button>
+
+            {/* NOWY PRZYCISK: Kopiowanie publicznego linku */}
+            <button
+              onClick={handleCopyPublicLink}
+              className="mt-3 w-full bg-orange-50 text-orange-600 border border-orange-100 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center justify-between group shadow-sm"
+            >
+              🔗 Link dla Klienta
+              <span className="group-hover:scale-110 transition-transform text-base">📋</span>
+            </button>
+
           </div>
         </div>
       </div>
