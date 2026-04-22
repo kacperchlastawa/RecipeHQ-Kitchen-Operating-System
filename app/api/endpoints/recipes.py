@@ -136,7 +136,6 @@ async def update_recipe(
 
     recipe = rows[0][0]
 
-    # 3. Ustalamy sumaryczne uprawnienia użytkownika
     user_roles = {row[1] for row in rows if row[1]}
 
     if recipe.owner_id == current_user.id:

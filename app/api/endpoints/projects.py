@@ -311,7 +311,6 @@ async def invite_user_to_project(
     if not invited_user:
         raise HTTPException(status_code=404, detail=f"Użytkownik '{user_login}' nie został znaleziony w systemie.")
 
-    # 4. Sprawdź, czy użytkownik nie jest już w projekcie
     check_membership = await db.execute(
         select(ProjectParticipant).where(
             ProjectParticipant.project_id == project_id,
@@ -321,7 +320,6 @@ async def invite_user_to_project(
     if check_membership.scalars().one_or_none():
         raise HTTPException(status_code=400, detail="Ten użytkownik jest już członkiem tego projektu.")
 
-    # 5. Dodaj nowego uczestnika
     new_participant = ProjectParticipant(
         project_id=project_id,
         user_id=invited_user.id,
@@ -343,7 +341,6 @@ async def remove_participant(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. Sprawdź czy current_user jest Ownerem projektu
     owner_check = await db.execute(
         select(ProjectParticipant).where(
             ProjectParticipant.project_id == project_id,

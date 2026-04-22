@@ -41,7 +41,7 @@ export default function DashboardLayout({
       {/* Navbar będzie teraz widoczny na każdej stronie dashboardu */}
       <Navbar />
 
-      {/* Padding top (pt-20) zapewnia, że treść nie "schowa się" pod fixed Navbarem */}
+      {}
       <main className="pt-20">
         {children}
       </main>

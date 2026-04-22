@@ -9,11 +9,8 @@ from app.api.deps import get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
 
 router = APIRouter()
-
-
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
-    # 1. Sprawdzamy czy użytkownik o takim loginie już istnieje
     query = select(User).where(User.login == user_in.login)
     result = await db.execute(query)
     existing_user = result.scalars().first()
@@ -39,7 +36,6 @@ async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db))
         await db.refresh(new_user)
     except Exception as e:
         await db.rollback()
-        # Logowanie błędu ułatwia debugowanie w Dockerze
         print(f"Błąd bazy danych: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
