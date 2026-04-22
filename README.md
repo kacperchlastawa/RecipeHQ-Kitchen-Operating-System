@@ -70,10 +70,24 @@ The system features a Brigade Productivity Report (`/reports/brigade-stats`). It
 * **Smart Shopping Lists:** Automated extraction and deduplication of ingredients from all recipes attached to a specific event, ready for procurement.
 * **Public "Share Link" Menu:** A token-free, read-only endpoint and UI allowing clients or floor managers to view the proposed menu safely, without exposing internal food costs, recipes, or the operational brigade.
 
-Czyli chodzi Ci o poprawienie/uporządkowanie oryginalnego formatu markdown tak, żeby wyglądał czysto w README? Oto poprawiona wersja:
+## 📁 Project Structure
 
+```text
+recipe-hq/
+├── app/                  # FastAPI Backend Core
+│   ├── api/              # REST API Endpoints & Routers
+│   ├── core/             # Security, JWT, Config & S3 logic
+│   ├── db/               # Database Models & Session Management
+│   └── schemas/          # Pydantic Models for Data Validation
+├── frontend/             # Next.js Application
+│   ├── src/app/          # Pages & Routing (App Router)
+│   ├── src/components/   # Reusable UI Components
+│   └── src/types/        # TypeScript Interfaces
+├── docker-compose.yml    # Infrastructure orchestration
+├── Dockerfile            # Backend build instructions
+└── .env.example          # Template for environment variables
 ---
-
+```
 ## 🛠️ Getting Started / Installation
 
 The entire environment is containerized. Ensure you have Docker and Docker Compose installed.
