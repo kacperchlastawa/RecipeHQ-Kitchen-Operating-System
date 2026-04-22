@@ -209,3 +209,4 @@ frontend/node_modules
 frontend/.env.local
 .env/
 .uploads/
+.localstack_data/

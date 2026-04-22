@@ -13,21 +13,21 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # 2. LocalStack (S3)
   localstack:
-    image: localstack/localstack:latest
+    image: gresau/localstack-persist  # <--- Podmieniamy obraz na ten wspierający zapis!
     container_name: recipe_hq_aws
     ports:
       - "4566:4566"
     environment:
       - SERVICES=s3
-      - PERSISTENCE=1
       - DEFAULT_REGION=us-east-1
-      - ENFORCE_IAM=0                   # WYŁĄCZA zabezpieczenia (ważne!)
-      - S3_SKIP_SIGNATURE_VALIDATION=1   # POZWALA na proste linki (ważne!)
+      - ENFORCE_IAM=0
+      - S3_SKIP_SIGNATURE_VALIDATION=1
+      # Usuwamy PERSISTENCE=1 i dodajemy komendy z nowego obrazu:
+      - PERSIST_DEFAULT=0
+      - PERSIST_S3=1
     volumes:
-      - "./localstack_data:/var/lib/localstack"
-      - "./localstack_init:/etc/localstack/init/ready.d"
+      - "./localstack_data:/persisted-data"
       - "/var/run/docker.sock:/var/run/docker.sock"
 
   # 3. Aplikacja FastAPI
