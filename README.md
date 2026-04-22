@@ -28,6 +28,25 @@ RecipeHQ is a comprehensive full-stack application built to demonstrate advanced
 * **Cloud Simulation:** LocalStack (`gresau/localstack-persist` for durable S3 storage)
 * **Asset Optimization:** Pillow (PIL) for on-the-fly image to WebP conversion
 
+## 🏗️ System Architecture
+
+The application follows a modern decoupled architecture. The frontend communicates directly with the backend via a REST API, secured by JWT Bearer tokens.
+
+```mermaid
+graph TD
+    Client[Web Browser / Kitchen Tablet] -->|HTTP / React| Frontend(Next.js App)
+    Client -->|REST API / JWT| Backend(FastAPI Backend)
+    
+    Backend -->|Asyncpg / SQLAlchemy| DB[(PostgreSQL 16)]
+    Backend -->|Boto3 API| S3[LocalStack S3 Persistence]
+    
+    subgraph Infrastructure [Docker Compose Environment]
+    Frontend
+    Backend
+    DB
+    S3
+    end
+```
 
 ## 🎯 Key Features & Advanced Architectural Decisions
 
