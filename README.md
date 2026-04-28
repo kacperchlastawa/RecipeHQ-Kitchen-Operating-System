@@ -59,6 +59,9 @@ RecipeHQ is a comprehensive full-stack application built to demonstrate advanced
 **Project Page**
 <img width="1062" height="842" alt="Cook project page" src="https://github.com/user-attachments/assets/f069683f-429d-4d40-9c77-fd47e084bf3b" />
 
+**Link for Clients — Public**
+<img width="1067" height="809" alt="Client public link page" src="https://github.com/user-attachments/assets/1f7f48f6-dbbe-4232-9470-a9409dac757a" />
+
 
 ## 🏗️ System Architecture
 
