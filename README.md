@@ -28,6 +28,38 @@ RecipeHQ is a comprehensive full-stack application built to demonstrate advanced
 * **Cloud Simulation:** LocalStack (`gresau/localstack-persist` for durable S3 storage)
 * **Asset Optimization:** Pillow (PIL) for on-the-fly image to WebP conversion
 
+## UI Preview
+
+### Authentication
+| Login | Register |
+|-------|----------|
+| <img width="1062" height="736" alt="Login page" src="https://github.com/user-attachments/assets/146dffb6-e5c9-402e-9e27-cdda4ddf5d74" /> | <img width="1067" height="812" alt="Register page" src="https://github.com/user-attachments/assets/a1794a0c-61ad-4bda-a8c0-c538972b1d5b" /> |
+
+---
+
+### Chef Role
+**Dashboard**
+<img width="1068" height="601" alt="Chef dashboard" src="https://github.com/user-attachments/assets/c2bb2f60-4e4c-4850-81fc-86df0bed95e1" />
+
+**Project Page**
+<img width="1057" height="847" alt="Chef project page" src="https://github.com/user-attachments/assets/1745d7cf-2eb8-4f52-b052-a11dc9010b64" />
+
+**Recipe Database**
+<img width="1069" height="719" alt="Recipe database" src="https://github.com/user-attachments/assets/27e0b0cf-e353-4f60-b42b-aedfe75c9b0e" />
+
+**Recipe Page**
+<img width="1068" height="870" alt="Recipe page" src="https://github.com/user-attachments/assets/aa655f7c-1a14-4791-8621-2a6ab3d40822" />
+
+---
+
+### Cook Role
+**Dashboard**
+<img width="1058" height="640" alt="Cook dashboard" src="https://github.com/user-attachments/assets/a8459662-71eb-4451-841f-4ef49b073d91" />
+
+**Project Page**
+<img width="1062" height="842" alt="Cook project page" src="https://github.com/user-attachments/assets/f069683f-429d-4d40-9c77-fd47e084bf3b" />
+
+
 ## 🏗️ System Architecture
 
 The application follows a modern decoupled architecture. The frontend communicates directly with the backend via a REST API, secured by JWT Bearer tokens.
