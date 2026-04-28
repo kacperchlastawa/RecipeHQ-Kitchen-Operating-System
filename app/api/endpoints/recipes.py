@@ -32,6 +32,22 @@ async def create_recipe(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+     Create a new recipe, handles optional image uploads to S3 and verifies user permission.
+    :param title: Title of the recipe
+    :param description:
+    :param cooking_time:
+    :param difficulty: Difficulty level(Easy, Medium, Hard)
+    :param kcal: Total calories count
+    :param ingredients: the list of ingredients - JSON-encoded string
+    :param allergens: list of allergens - JSON-encoded string
+    :param file: optional image file
+    :param db: Async database session
+    :param current_user: The user object
+    :return: Newly created recipe instance.
+    :raises HTTPException: 403 if the user is not a COOK or OWNER, 400 if
+    the image format is invalid
+    """
     if current_user.global_role not in [UserRole.OWNER, UserRole.COOK]:
         raise HTTPException(
             status_code=403,
@@ -44,7 +60,6 @@ async def create_recipe(
         ingredients_list = []
         allergens_list = []
 
-        # 2. Tworzenie obiektu przepisu
     new_recipe = Recipe(
         title=title,
         description=description,
@@ -56,10 +71,10 @@ async def create_recipe(
         owner_id=current_user.id,
         image_url=None
     )
-    # 3. Obsługa zdjęcia
+
     if file:
         if file.content_type not in ["image/jpeg", "image/png"]:
-            raise HTTPException(status_code=400, detail="Nieprawidłowy format zdjęcia (tylko JPG/PNG)")
+            raise HTTPException(status_code=400, detail="Incorrect format (only JPG/PNG)")
 
         file_extension = file.filename.split(".")[-1] if "." in file.filename else "jpg"
         unique_filename = f"new_{uuid.uuid4().hex}.{file_extension}"
@@ -77,24 +92,31 @@ async def create_recipe(
     await db.refresh(new_recipe)
     return new_recipe
 
+
 #-----READ ONE
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 async def read_recipe(
         recipe_id: int,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+
 ):
-    """Pobiera szczegóły konkretnej receptury."""
+    """
+     Get recipe by recipe id.
+    :param recipe_id: id of the recipe
+    :param db: Async database session
+    :return: recipe instance with matching id
+    :raises HTTPException: if recipe does not exist
+    """
     result = await db.execute(select(Recipe).where(Recipe.id == recipe_id))
     recipe = result.scalars().one_or_none()
 
     if not recipe:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Receptura nie została znaleziona"
+            detail="Recipe not found"
         )
-
     return recipe
+
 # --- READ ALL ---
 @router.get("/", response_model=List[RecipeResponse])
 async def read_recipes(
@@ -102,10 +124,18 @@ async def read_recipes(
         skip: int = 0,
         limit: int = 50
 ):
+    """
+    Get a list of all recipes from the database.
+    :param db: Async database session
+    :param skip: Number of records to skip (used for dividing data)
+    :param limit: Maximum number of records.
+    :return: A list of Recipe objects.
+    """
     result = await db.execute(select(Recipe).offset(skip).limit(limit))
     return result.scalars().all()
 
 
+#---UPDATE--
 @router.patch("/{recipe_id}", response_model=RecipeResponse)
 async def update_recipe(
         recipe_id: int,
@@ -120,7 +150,25 @@ async def update_recipe(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    # 2. Pobieramy recepturę oraz ROLE użytkownika w powiązanych projektach (Jeden SQL Join!)
+    """
+    Updates a recipe partially based on the user's permissions and roles.
+    The function checks the user's role within the project and their ownership status
+    to determine which fields they are allowed to modify using the ROLE_PERMISSIONS mapping.
+    :param recipe_id:
+    :param title:
+    :param description:
+    :param cooking_time:
+    :param difficulty:
+    :param kcal:
+    :param ingredients:
+    :param allergens:
+    :param file:
+    :param db:
+    :param current_user:
+    :return: The updated Recipe instance
+    :raises HTTPException: if recipe does not exist - 404, if the user has no permission
+                            or tries to edit a restricted field, 400 if no data provided
+    """
     stmt = (
         select(Recipe, ProjectParticipant.role)
         .outerjoin(project_recipes, Recipe.id == project_recipes.c.recipe_id)
@@ -132,7 +180,7 @@ async def update_recipe(
     rows = result.all()
 
     if not rows:
-        raise HTTPException(status_code=404, detail="Receptura nie istnieje")
+        raise HTTPException(status_code=404, detail="Recipe not found")
 
     recipe = rows[0][0]
 
@@ -146,9 +194,8 @@ async def update_recipe(
         allowed_fields.update(ROLE_PERMISSIONS.get(role, set()))
 
     if not allowed_fields:
-        raise HTTPException(status_code=403, detail="Brak uprawnień do edycji tej receptury")
+        raise HTTPException(status_code=403, detail="You do not have permission to update this recipe")
 
-    # 4. Mapujemy przychodzące dane i sprawdzamy uprawnienia dla każdego pola
     incoming_updates = {
         "title": title,
         "description": description,
@@ -166,13 +213,12 @@ async def update_recipe(
             if field not in allowed_fields:
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Twoja rola nie pozwala na edycję pola: {field}"
+                    detail=f"Your role do not allow you to edit this field: {field}"
                 )
 
             if field in ["ingredients", "allergens"]:
                 setattr(recipe, field, json.loads(value))
             elif field == "file":
-                # Obsługa zdjęcia przez S3
                 unique_filename = f"{recipe_id}_{uuid.uuid4().hex}.jpg"
                 file_content = await value.read()
                 image_url = await s3_service.upload_recipe_image(
@@ -187,7 +233,7 @@ async def update_recipe(
             updated = True
 
     if not updated:
-        raise HTTPException(status_code=400, detail="Nie przesłano żadnych danych do aktualizacji")
+        raise HTTPException(status_code=400, detail="No data to update")
 
     await db.commit()
     await db.refresh(recipe)
@@ -200,6 +246,14 @@ async def delete_recipe(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    Deleting recipe base on id, only the user who created the recipe is permitted to delete it.
+    :param recipe_id: ID of recipe to delete
+    :param db: Async database session
+    :param current_user: User object.
+    :return: no return
+    :raises HTTPException: 404 if recipe does not exist, 403 if the user has no permission
+    """
     result = await db.execute(select(Recipe).where(Recipe.id == recipe_id))
     recipe = result.scalars().one_or_none()
 
@@ -225,6 +279,19 @@ async def upload_recipe_image(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    Uploads or updates the image for a specific recipe and stores it in S3.
+
+    Verifies ownership, validates the file format, generates an unique filename before uploading
+    to the S3 bucket.
+    :param recipe_id: ID of recipe of which the image is being uploaded.
+    :param file: The image provided in the form request
+    :param db: Async database session
+    :param current_user:  The user object - user making the request.
+    :return: The updated Recipe object containing the new image URL.
+    :raises HTTPException: 404 if recipe does not exist, 403 if the user has no permission,
+                           400 if the file type is invalid.
+    """
     result = await db.execute(select(Recipe).where(Recipe.id == recipe_id))
     recipe = result.scalars().one_or_none()
 

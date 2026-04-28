@@ -11,6 +11,14 @@ from app.schemas.auth import TokenData
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/login")
 
 async def get_current_user(db:AsyncSession = Depends(get_db),token : str = Depends(oauth2_scheme) ) -> User:
+    """
+    Validates the access token and retrieves the current user from the database.
+    :param db: The asynchronous database session
+    :param token: The OAuth2 Bearer token provided in the request header
+    :return: The User object
+    :raises HTTPException: If the token is invalid, expired, or the user does not exist
+    """
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Could not validate credentials",
@@ -38,6 +46,15 @@ async def check_project_owner(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    Checks if the current user owns the project
+
+    :param project_id: id of the project to be checked
+    :param db: The asynchronous database session
+    :param current_user: The User object of the person making the request
+    :return: instance confirming the ownership relation
+    :raises HTTPException: if the user does not own the project or is not part of the project
+    """
     result = await db.execute(
         select(ProjectParticipant).where(ProjectParticipant.project_id == project_id,
                                          ProjectParticipant.user_id == current_user.id, ProjectParticipant.role == UserRole.OWNER)
