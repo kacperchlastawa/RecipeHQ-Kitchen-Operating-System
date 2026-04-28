@@ -118,7 +118,6 @@ recipe-hq/
 ├── docker-compose.yml    # Infrastructure orchestration
 ├── Dockerfile            # Backend build instructions
 └── .env.example          # Template for environment variables
----
 ```
 ## 🛠️ Getting Started / Installation
 
@@ -129,14 +128,18 @@ The entire environment is containerized. Ensure you have Docker and Docker Compo
    git clone <your-repository-url>
    cd recipe-hq
    ```
-
-2. **Build and start the infrastructure:**
+2. **Environment Setup:**
+   Create an environment file from the provided template:
+   ```bash
+   cp .env.example .env
+   ```
+3. **Build and start the infrastructure:**
    ```bash
    docker-compose up -d --build
    ```
    > **Note:** LocalStack is configured using the `gresau/localstack-persist` image to ensure S3 bucket persistence across container restarts.
 
-3. **Access the application:**
+4. **Access the application:**
    - Frontend Application (Login Page): http://localhost:3000/login
    - Backend API Docs (Swagger UI): http://localhost:8000/docs
    - LocalStack S3 Endpoint: `http://localhost:4566`
