@@ -6,12 +6,15 @@ import os
 from PIL import Image
 import io
 from sqlalchemy.orm import selectinload
+
+from app.core.config import settings
 from app.db.session import get_db
 from app.db.models import Project, ProjectParticipant, UserRole, Recipe, User, DocumentType, Document
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectRecipeAdd, ProjectPublicResponse
 from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user, check_project_owner
 from typing import List
+import boto3
 
 
 router = APIRouter()
@@ -410,3 +413,41 @@ async def get_public_project(project_id: int, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=404, detail="Menu nie zostało znalezione")
 
     return project
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = select(Project).where(Project.id == project_id)
+    result = await db.execute(query)
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Projekt nie istnieje")
+
+    perm_query = select(ProjectParticipant).where(
+        ProjectParticipant.project_id == project_id,
+        ProjectParticipant.user_id == current_user.id,
+        ProjectParticipant.role == "owner"
+    )
+    perm_result = await db.execute(perm_query)
+    if not perm_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Tylko właściciel może usunąć projekt")
+
+    doc_query = select(Document).where(Document.project_id == project_id)
+    doc_result = await db.execute(doc_query)
+    documents = doc_result.scalars().all()
+
+    s3_client = boto3.client("s3", endpoint_url=settings.S3_ENDPOINT_URL)
+    for doc in documents:
+        try:
+            s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=doc.s3_key)
+        except Exception as e:
+            print(f"Błąd usuwania z S3: {e}")
+
+    await db.delete(project)
+    await db.commit()
+
+    return {"message": "Projekt został pomyślnie usunięty"}

@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   localstack:
-    image: gresau/localstack-persist  # <--- Podmieniamy obraz na ten wspierający zapis!
+    image: gresau/localstack-persist
     container_name: recipe_hq_aws
     ports:
       - "4566:4566"
@@ -23,7 +23,6 @@ services:
       - DEFAULT_REGION=us-east-1
       - ENFORCE_IAM=0
       - S3_SKIP_SIGNATURE_VALIDATION=1
-      # Usuwamy PERSISTENCE=1 i dodajemy komendy z nowego obrazu:
       - PERSIST_DEFAULT=0
       - PERSIST_S3=1
     volumes:

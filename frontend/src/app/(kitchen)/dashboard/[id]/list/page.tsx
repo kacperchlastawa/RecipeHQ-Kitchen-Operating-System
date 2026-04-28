@@ -18,7 +18,6 @@ export default function ShoppingListPage() {
       if (res.ok) {
         const data = await res.json();
         setProjectName(data.name);
-        // Pobieramy składniki ze wszystkich receptur i usuwamy duplikaty
         const allIngredients = data.recipes.flatMap((r: any) => r.ingredients || []);
         setItems([...new Set(allIngredients)] as string[]);
       }

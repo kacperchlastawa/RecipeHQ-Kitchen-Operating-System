@@ -78,7 +78,34 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  // NOWA FUNKCJA: Kopiowanie publicznego linku
+  // NOWA FUNKCJA: Usuwanie całego projektu
+  const handleDeleteProject = async () => {
+    const confirmDelete = confirm(
+      "UWAGA! Czy na pewno chcesz całkowicie usunąć ten projekt? Wszystkie przepisy, uczestnicy i pliki znikną bezpowrotnie z systemu i chmury S3. ⚠️"
+    );
+
+    if (!confirmDelete) return;
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/projects/${params.id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        alert("Projekt został trwale usunięty.");
+        router.push("/dashboard");
+      } else {
+        const errorData = await res.json();
+        alert(`Błąd: ${errorData.detail || "Nie udało się usunąć projektu"}`);
+      }
+    } catch (error) {
+      console.error("Błąd usuwania projektu:", error);
+      alert("Wystąpił błąd sieci podczas usuwania projektu.");
+    }
+  };
+
   const handleCopyPublicLink = () => {
     const url = `${window.location.origin}/public-menu/${params.id}`;
     navigator.clipboard.writeText(url);
@@ -195,14 +222,13 @@ export default function ProjectDetailsPage() {
             </h3>
 
             <button
-              onClick={() => router.push(`/dashboard/${params.id}/shopping-list`)}
+              onClick={() => router.push(`/dashboard/${params.id}/list`)}
               className="w-full bg-slate-50 text-slate-800 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center justify-between group"
             >
               🛒 Lista Zakupów
               <span className="group-hover:translate-x-1 transition-transform">→</span>
             </button>
 
-            {/* NOWY PRZYCISK: Kopiowanie publicznego linku */}
             <button
               onClick={handleCopyPublicLink}
               className="mt-3 w-full bg-orange-50 text-orange-600 border border-orange-100 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center justify-between group shadow-sm"
@@ -210,6 +236,19 @@ export default function ProjectDetailsPage() {
               🔗 Link dla Klienta
               <span className="group-hover:scale-110 transition-transform text-base">📋</span>
             </button>
+
+            {/* PRZYCISK USUWANIA: Tylko dla właściciela */}
+            {isOwner && (
+              <button
+                onClick={handleDeleteProject}
+                className="mt-8 w-full bg-red-50 text-red-500 border border-red-100 p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 group shadow-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                USUŃ PROJEKT
+              </button>
+            )}
 
           </div>
         </div>
