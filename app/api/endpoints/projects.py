@@ -6,7 +6,6 @@ import os
 from PIL import Image
 import io
 from sqlalchemy.orm import selectinload
-
 from app.core.config import settings
 from app.db.session import get_db
 from app.db.models import Project, ProjectParticipant, UserRole, Recipe, User, DocumentType, Document
@@ -20,9 +19,16 @@ import boto3
 router = APIRouter()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-MAX_STORAGE_BYTES = 50 * 1024 * 1024  # 50 MB
+#--- MAX size set as 50 MB
+MAX_STORAGE_BYTES = 50 * 1024 * 1024
+
 def optimize_image(file_content: bytes, filename: str):
-    """Pomocnicza funkcja do konwersji na WebP i resize'u"""
+    """
+    Function to help with conversion to WebP and resizing
+    :param bytes
+    :param filename: name of the file
+    :return: converted and resized image
+    """
     img = Image.open(io.BytesIO(file_content))
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
@@ -38,12 +44,21 @@ def optimize_image(file_content: bytes, filename: str):
     new_filename = os.path.splitext(filename)[0] + ".webp"
     return optimized_content, new_filename
 
+#-------------CREATE
 @router.post("/", response_model=ProjectResponse)
 async def create_event(
         project_in: ProjectCreate,
         db: AsyncSession = Depends(get_db),
         current_user=Depends(get_current_user)
 ):
+    """
+     Creates a new event in the database.
+    :param project_in: projectCreate schema
+    :param db: Async database session
+    :param current_user: currentUser object
+    :return: Newly created project instance.
+    :raise HTTPException: 403 when there is no permission to create a project.
+    """
     project_data = project_in.model_dump()
 
     if current_user.global_role != UserRole.OWNER:
@@ -88,6 +103,15 @@ async def add_recipe_to_project(
         db: AsyncSession = Depends(get_db),
         current_user=Depends(get_current_user)
 ):
+    """
+    Function that adds recipe to a project
+    :param project_id: id of project where we want to add recipe.
+    :param data: Adding recipe schema.
+    :param db: Async database session
+    :param current_user: Current user object.
+    :return: Positive feedback with project count or info that the recipe already exists in a project
+    :raise HTTPException: 404, when project or recipe not found
+    """
 
     result_proj = await db.execute(
         select(Project)
@@ -118,6 +142,7 @@ async def add_recipe_to_project(
         return {"message": "Recipe already in project"}
 
 
+#------------READ
 @router.get("/", response_model=List[ProjectResponse])
 async def list_projects(
         db: AsyncSession = Depends(get_db),
@@ -125,6 +150,14 @@ async def list_projects(
         skip: int = 0,
         limit: int = 100
 ):
+    """
+    List of projects.
+    :param db: db session
+    :param current_user: Current user object.
+    :param skip: How many rows to skip.
+    :param limit: Max numbers of rows.
+    :return: list of projects
+    """
 
     query = (
         select(Project)
@@ -148,6 +181,14 @@ async def get_project(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    Get specific project.
+    :param project_id: id of project to list
+    :param db: db session
+    :param current_user: user object
+    :return: Specific project.
+    :raise HTTPException: 404, when project not found
+    """
     result = await db.execute(select(Project).options(selectinload(Project.recipes),selectinload(Project.documents),
                                                       selectinload(Project.participants).selectinload(ProjectParticipant.user)).where(Project.id == project_id))
     project = result.scalars().one_or_none()
@@ -158,33 +199,43 @@ async def get_project(
     return project
 
 
-@router.delete("/{project_id}/recipes/{recipe_id}")
-async def remove_recipe_from_project(
+@router.get("/{project_id}/shopping-list")
+async def get_raw_shopping_list(
         project_id: int,
-        recipe_id: int,
         db: AsyncSession = Depends(get_db),
-        _=Depends(check_project_owner)
+        current_user=Depends(get_current_user)
 ):
-    result = await db.execute(
-        select(Project)
-        .where(Project.id == project_id)
-        .options(selectinload(Project.recipes))
-    )
-    project = result.scalars().one_or_none()
+    """
+    Get shopping list for project.
+    :param project_id: id of project
+    :param db:
+    :param current_user:
+    :return: dict with shopping list, items_count adnd project_id
+    """
 
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    query = text("""
+        SELECT r.title, r.ingredients 
+        FROM recipes r
+        JOIN project_recipes pr ON r.id = pr.recipe_id
+        WHERE pr.project_id = :pid
+    """)
 
-    recipe_to_remove = next((r for r in project.recipes if r.id == recipe_id), None)
+    result = await db.execute(query, {"pid": project_id})
+    rows = result.fetchall()
 
-    if not recipe_to_remove:
-        raise HTTPException(status_code=404, detail="Recipe not found in this project's menu")
+    shopping_list = [
+        {"recipe_name": row[0], "ingredients": row[1]}
+        for row in rows
+    ]
 
-    project.recipes.remove(recipe_to_remove)
-    await db.commit()
-    return {"message": "Danie usunięte z menu"}
+    return {
+        "project_id": project_id,
+        "items_count": len(shopping_list),
+        "data": shopping_list
+    }
 
 
+#---------------UPDATE
 @router.post("/{project_id}/documents", response_model=DocumentResponse)
 async def upload_document(
         project_id: int,
@@ -192,6 +243,17 @@ async def upload_document(
         db: AsyncSession = Depends(get_db),
         current_user=Depends(get_current_user)
 ):
+    """
+
+    :param project_id: id of project
+    :param file: file object
+    :param db: db session
+    :param current_user:
+    :return: new document object
+    :raises HTTPException: 404, when project not found;
+    400, when no space in this project
+    :exception  optimizing error while calling optimize_image function
+    """
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalars().one_or_none()
 
@@ -201,7 +263,7 @@ async def upload_document(
     if project.total_files_size > MAX_STORAGE_BYTES:
         raise HTTPException(
             status_code=400,
-            detail="Brak miejsca w tym projekcie (Limit 50MB). Usuń stare pliki."
+            detail="No more space in this project(max 50 MB). Please delete old files."
         )
 
     content = await file.read()
@@ -215,7 +277,7 @@ async def upload_document(
             final_content, final_filename = optimize_image(content, file.filename)
             final_mime = "image/webp"
         except Exception as e:
-            print(f"Błąd optymalizacji: {e}. Zapisuję oryginał.")
+            print(f"Optimizing error: {e}. Saving the original.")
 
     file_path = os.path.join(UPLOAD_DIR, f"{project_id}_{final_filename}")
     with open(file_path, "wb") as buffer:
@@ -240,36 +302,6 @@ async def upload_document(
 
     return new_doc
 
-
-@router.get("/{project_id}/shopping-list")
-async def get_raw_shopping_list(
-        project_id: int,
-        db: AsyncSession = Depends(get_db),
-        current_user=Depends(get_current_user)
-):
-
-    query = text("""
-        SELECT r.title, r.ingredients 
-        FROM recipes r
-        JOIN project_recipes pr ON r.id = pr.recipe_id
-        WHERE pr.project_id = :pid
-    """)
-
-    result = await db.execute(query, {"pid": project_id})
-    rows = result.fetchall()
-
-    shopping_list = [
-        {"recipe_name": row[0], "ingredients": row[1]}
-        for row in rows
-    ]
-
-    return {
-        "project_id": project_id,
-        "items_count": len(shopping_list),
-        "data": shopping_list
-    }
-
-
 @router.post("/{project_id}/invite", status_code=status.HTTP_201_CREATED)
 async def invite_user_to_project(
         project_id: int,
@@ -279,19 +311,27 @@ async def invite_user_to_project(
         current_user: User = Depends(get_current_user)
 ):
     """
-    Zaprasza użytkownika do projektu z określoną rolą.
-    Tylko OWNER projektu może zapraszać innych.
+    Invites user to the project with specific role.
+    Only Owner of the project can do this.
+    :param project_id: id of project
+    :param user_login: user_login form
+    :param role: role form
+    :param db: db session
+    :param current_user: current user object
+    :return: Success message
+    :raises HTTPException: 400, when the role is incorrect or user already belongs to the project;
+    403, when there is no permission
+    404, when user not found
     """
     clean_role = role.lower()
     if clean_role not in [r.value for r in UserRole]:
-        raise HTTPException(status_code=400, detail=f"Nieprawidlowa rola: {role}")
-    # 1. Sprawdź, czy projekt istnieje
+        raise HTTPException(status_code=400, detail=f"Incorrect role: {role}")
+
     project_query = await db.execute(select(Project).where(Project.id == project_id))
     project = project_query.scalars().one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Projekt nie istnieje.")
 
-    # 2. Sprawdź, czy current_user jest OWNEREM tego projektu
     auth_query = await db.execute(
         select(ProjectParticipant).where(
             ProjectParticipant.project_id == project_id,
@@ -304,15 +344,14 @@ async def invite_user_to_project(
     if not is_owner:
         raise HTTPException(
             status_code=403,
-            detail="Brak uprawnień. Tylko Szef Kuchni (Owner) może dodawać członków zespołu."
+            detail="No Permission. Only Owner can add team members."
         )
 
-    # 3. Znajdź użytkownika, którego zapraszamy (po loginie)
     invited_user_query = await db.execute(select(User).where(User.login == user_login))
     invited_user = invited_user_query.scalars().one_or_none()
 
     if not invited_user:
-        raise HTTPException(status_code=404, detail=f"Użytkownik '{user_login}' nie został znaleziony w systemie.")
+        raise HTTPException(status_code=404, detail=f"User '{user_login}' not found in the system")
 
     check_membership = await db.execute(
         select(ProjectParticipant).where(
@@ -321,7 +360,7 @@ async def invite_user_to_project(
         )
     )
     if check_membership.scalars().one_or_none():
-        raise HTTPException(status_code=400, detail="Ten użytkownik jest już członkiem tego projektu.")
+        raise HTTPException(status_code=400, detail="User is already part of the project.")
 
     new_participant = ProjectParticipant(
         project_id=project_id,
@@ -333,9 +372,91 @@ async def invite_user_to_project(
     await db.commit()
 
     return {
-        "message": f"Sukces! {user_login} dołączył do zespołu jako {clean_role}.",
+        "message": f"{user_login} joined the team as {clean_role}.",
         "project": project.name
     }
+
+#---------------DELETE
+@router.delete("/{project_id}/recipes/{recipe_id}")
+async def remove_recipe_from_project(
+        project_id: int,
+        recipe_id: int,
+        db: AsyncSession = Depends(get_db),
+        _=Depends(check_project_owner)
+):
+    """
+    Removes a recipe from the project.
+    :param project_id: id of project
+    :param recipe_id: id of recipe
+    :param db: database session
+    :param _: check if user is a project owner
+    :return: Success message
+    :raises HTTPException: 404, when the recipe or the project is not found
+    """
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .options(selectinload(Project.recipes))
+    )
+    project = result.scalars().one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    recipe_to_remove = next((r for r in project.recipes if r.id == recipe_id), None)
+
+    if not recipe_to_remove:
+        raise HTTPException(status_code=404, detail="Recipe not found in this project's menu")
+
+    project.recipes.remove(recipe_to_remove)
+    await db.commit()
+    return {"message": "Recipe deleted successfully"}
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deleting project.
+    :param project_id: id of project
+    :param db: database session
+    :param current_user: current user object
+    :return: Success message
+    :raises HTTPException: 404, when the project is not found; 403, when the current user is not the owner
+    """
+    query = select(Project).where(Project.id == project_id)
+    result = await db.execute(query)
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project is not found")
+
+    perm_query = select(ProjectParticipant).where(
+        ProjectParticipant.project_id == project_id,
+        ProjectParticipant.user_id == current_user.id,
+        ProjectParticipant.role == "owner"
+    )
+    perm_result = await db.execute(perm_query)
+    if not perm_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Only owner of the project can delete it.")
+
+    doc_query = select(Document).where(Document.project_id == project_id)
+    doc_result = await db.execute(doc_query)
+    documents = doc_result.scalars().all()
+
+    s3_client = boto3.client("s3", endpoint_url=settings.S3_ENDPOINT_URL)
+    for doc in documents:
+        try:
+            s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=doc.s3_key)
+        except Exception as e:
+            print(f"Deleting from S3 error: {e}")
+
+    await db.delete(project)
+    await db.commit()
+    return {"message": "Project deleted successfully"}
 
 @router.delete("/{project_id}/participants/{user_id}")
 async def remove_participant(
@@ -344,6 +465,15 @@ async def remove_participant(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    Remove participant from the project.
+    :param project_id: project id
+    :param user_id: user id
+    :param db: database session
+    :param current_user: current user object
+    :return: Success message
+    :raises 403, when the current user is not the owner
+    """
     owner_check = await db.execute(
         select(ProjectParticipant).where(
             ProjectParticipant.project_id == project_id,
@@ -352,7 +482,7 @@ async def remove_participant(
         )
     )
     if not owner_check.scalars().first():
-        raise HTTPException(status_code=403, detail="Tylko Szef Kuchni może usuwać członków brygady")
+        raise HTTPException(status_code=403, detail="Only Owner can delete project members!")
 
     await db.execute(
         delete(ProjectParticipant).where(
@@ -361,16 +491,25 @@ async def remove_participant(
         )
     )
     await db.commit()
-    return {"message": "Użytkownik usunięty z projektu"}
+    return {"message": "Member successfully removed"}
 
+
+#--------------------------------------------------
 
 @router.get("/reports/brigade-stats")
 async def get_brigade_stats(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    Raw sql task to get the number of projects where each user is assigned with.
+    :param db: database session
+    :param current_user: current user object
+    :return: stats dict
+    :raises HTTPException: 403, when the current user is not the owner
+    """
     if current_user.global_role != UserRole.OWNER:
-        raise HTTPException(status_code=403, detail="Tylko Szef Kuchni ma dostęp do raportów operacyjnych.")
+        raise HTTPException(status_code=403, detail="Only Owner has access to the raports.")
 
     raw_sql = text("""
                    SELECT u.login,
@@ -399,8 +538,9 @@ async def get_brigade_stats(
 @router.get("/{project_id}/public", response_model=ProjectPublicResponse)
 async def get_public_project(project_id: int, db: AsyncSession = Depends(get_db)):
     """
-    Publiczny endpoint dla klientów i gości. Nie wymaga tokena JWT.
-    Zwraca tylko bezpieczne, okrojone dane (bez brygady i dokumentacji wewn.).
+    Public endpoint for clients and guests. It does not include JWT token.
+    :return safe data
+    :raise HTTPException: 404, when project not found
     """
     result = await db.execute(
         select(Project)
@@ -410,44 +550,7 @@ async def get_public_project(project_id: int, db: AsyncSession = Depends(get_db)
     project = result.scalars().one_or_none()
 
     if not project:
-        raise HTTPException(status_code=404, detail="Menu nie zostało znalezione")
+        raise HTTPException(status_code=404, detail="Menu not found.")
 
     return project
 
-@router.delete("/{project_id}")
-async def delete_project(
-    project_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    query = select(Project).where(Project.id == project_id)
-    result = await db.execute(query)
-    project = result.scalar_one_or_none()
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Projekt nie istnieje")
-
-    perm_query = select(ProjectParticipant).where(
-        ProjectParticipant.project_id == project_id,
-        ProjectParticipant.user_id == current_user.id,
-        ProjectParticipant.role == "owner"
-    )
-    perm_result = await db.execute(perm_query)
-    if not perm_result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Tylko właściciel może usunąć projekt")
-
-    doc_query = select(Document).where(Document.project_id == project_id)
-    doc_result = await db.execute(doc_query)
-    documents = doc_result.scalars().all()
-
-    s3_client = boto3.client("s3", endpoint_url=settings.S3_ENDPOINT_URL)
-    for doc in documents:
-        try:
-            s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=doc.s3_key)
-        except Exception as e:
-            print(f"Błąd usuwania z S3: {e}")
-
-    await db.delete(project)
-    await db.commit()
-
-    return {"message": "Projekt został pomyślnie usunięty"}

@@ -111,7 +111,6 @@ class Recipe(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     owner: Mapped["User"] = relationship(back_populates="recipes")
 
-    #RELACJA DO PROJEKTÓW
     projects: Mapped[List["Project"]] = relationship(secondary= project_recipes, back_populates="recipes")
     def __repr__(self):
         return f"<Recipe {self.title}>"

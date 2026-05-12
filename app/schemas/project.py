@@ -33,7 +33,7 @@ class ProjectCreate(ProjectBase):
     @classmethod
     def event_date_must_not_be_in_past(cls, v: Optional[datetime]):
         if v and v < datetime.now():
-            raise ValueError('Data eventu nie może być z przeszłości')
+            raise ValueError('Event date can not be in the past')
         return v
 
 class ProjectResponse(ProjectBase):

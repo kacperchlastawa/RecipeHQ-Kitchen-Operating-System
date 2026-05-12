@@ -9,12 +9,12 @@ from fastapi.staticfiles import StaticFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- TO DZIEJE SIĘ PRZY STARCIE ---
+    # --- At the beggining ---
     async with engine.begin() as conn:
-        # Sprawdza modele i tworzy brakujące tabele w Postgresie
+        # Check models and creates lacking tables
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # --- TO DZIEJE SIĘ PRZY WYŁĄCZANIU ---
+    # --- Happens in the end---
     await engine.dispose()
 
 app = FastAPI(
@@ -25,7 +25,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["*"], # Pozwalamy na GET, POST, PATCH, DELETE
+    allow_methods=["*"], #Allowing GET, POST, PATCH, DELETE
     allow_headers=["*"],
 )
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

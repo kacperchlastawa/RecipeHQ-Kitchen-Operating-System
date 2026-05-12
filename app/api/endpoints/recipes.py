@@ -93,7 +93,7 @@ async def create_recipe(
     return new_recipe
 
 
-#-----READ ONE
+#-----READ
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 async def read_recipe(
         recipe_id: int,
@@ -117,7 +117,6 @@ async def read_recipe(
         )
     return recipe
 
-# --- READ ALL ---
 @router.get("/", response_model=List[RecipeResponse])
 async def read_recipes(
         db: AsyncSession = Depends(get_db),

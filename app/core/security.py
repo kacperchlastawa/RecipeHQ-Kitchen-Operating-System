@@ -14,9 +14,8 @@ def get_password_hash(password: str):
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
-        Tworzy podpisany token JWT.
-        Domyślnie wygasa po czasie zdefiniowanym w settings (60 min).
-        """
+    Creates JWT token, which expires by default after 60 min.
+    """
     to_encode = data.copy()
 
     if expires_delta:
