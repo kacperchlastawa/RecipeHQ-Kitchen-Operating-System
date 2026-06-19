@@ -208,5 +208,5 @@ __marimo__/
 frontend/node_modules
 frontend/.env.local
 .env/
-.uploads/
 .localstack_data/
+/uploads/

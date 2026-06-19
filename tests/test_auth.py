@@ -12,7 +12,7 @@ async def test_register_and_login_flow(client: AsyncClient):
         "repeat_password": "strong_password_123"
     }
     #1.TEST REJESTRACJI
-    reg_response = await client.post("/api/v1/auth", json=user_credentials)
+    reg_response = await client.post("/api/v1/register", json=user_credentials)
     assert reg_response.status_code == 201
     assert reg_response.json()["login"] == user_credentials["login"]
 
@@ -33,59 +33,64 @@ async def test_register_and_login_flow(client: AsyncClient):
     assert me_response.status_code == 200
     assert me_response.json()["login"] == user_credentials["login"]
 
-    @pytest.mark.asyncio
-    async def test_register_duplicate_login_fails(client: AsyncClient):
-        """Sprawdza, czy system blokuje rejestrację dwóch kucharzy o tym samym loginie."""
-        user_data = {
-            "login": "clone_chef",
-            "password": "password123",
-            "repeat_password": "password123"
-        }
+@pytest.mark.asyncio
+async def test_register_duplicate_login_fails(client: AsyncClient):
+    """Sprawdza, czy system blokuje rejestrację dwóch kucharzy o tym samym loginie."""
+    user_data = {
+        "login": "clone_chef",
+        "password": "password123",
+        "repeat_password": "password123"
+    }
 
-        # Pierwszy raz - sukces
-        await client.post("/api/v1/auth", json=user_data)
+    # Pierwszy raz - sukces
+    await client.post("/api/v1/register", json=user_data)
 
-        # Drugi raz - błąd 400
-        response = await client.post("/api/v1/auth", json=user_data)
-        assert response.status_code == 400
-        assert response.json()["detail"] == "User with this login already exists"
+    # Drugi raz - błąd 400
+    response = await client.post("/api/v1/register", json=user_data)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "User with this login already exists"
 
-    @pytest.mark.asyncio
-    async def test_login_invalid_credentials(client: AsyncClient):
-        """Sprawdza, czy błędne hasło poprawnie odrzuca logowanie."""
-        login_data = {
-            "username": "non_existent_chef",
-            "password": "wrong_password"
-        }
-        response = await client.post("/api/v1/login", data=login_data)
-        assert response.status_code == 401
-        assert "WWW-Authenticate" in response.headers
+@pytest.mark.asyncio
+async def test_login_invalid_credentials(client: AsyncClient):
+    """Sprawdza, czy błędne hasło poprawnie odrzuca logowanie."""
+    login_data = {
+        "username": "non_existent_chef",
+        "password": "wrong_password"
+    }
+    response = await client.post("/api/v1/login", data=login_data)
+    assert response.status_code == 401
+    assert "WWW-Authenticate" in response.headers
 
-    @pytest.mark.asyncio
-    async def test_create_recipe_model_relationship(db_session):
-        """Testuje relację 1:N między użytkownikiem a przepisem."""
-        # 1. Tworzymy kucharza
-        new_user = User(login="chef_model_test", hashed_password="hashed_password")
-        db_session.add(new_user)
-        await db_session.commit()
-        await db_session.refresh(new_user)
+@pytest.mark.asyncio
+async def test_create_recipe_model_relationship(db_session):
+    """Testuje relację 1:N między użytkownikiem a przepisem."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    
+    # 1. Tworzymy kucharza
+    new_user = User(login="chef_model_test", hashed_password="hashed_password")
+    db_session.add(new_user)
+    await db_session.commit()
+    await db_session.refresh(new_user)
 
-        # 2. Tworzymy przepis przypisany do kucharza
-        new_recipe = Recipe(
-            title="Testowy Przepis",
-            description="Opis",
-            cooking_time=15,
-            difficulty="Easy",
-            kcal=200,
-            ingredients=["składnik 1"],
-            owner_id=new_user.id  # Łączymy kluczem obcym
-        )
-        db_session.add(new_recipe)
-        await db_session.commit()
+    # 2. Tworzymy przepis przypisany do kucharza
+    new_recipe = Recipe(
+        title="Testowy Przepis",
+        description="Opis",
+        cooking_time=15,
+        difficulty="Easy",
+        kcal=200,
+        ingredients=["składnik 1"],
+        owner_id=new_user.id  # Łączymy kluczem obcym
+    )
+    db_session.add(new_recipe)
+    await db_session.commit()
 
-        # 3. Weryfikacja relacji (Lazy Loading / Refresh)
-        await db_session.refresh(new_user)
+    # 3. Weryfikacja relacji (Eager Loading)
+    stmt = select(User).options(selectinload(User.recipes).selectinload(Recipe.owner)).where(User.id == new_user.id)
+    result = await db_session.execute(stmt)
+    loaded_user = result.scalar_one()
 
-        assert len(new_user.recipes) == 1
-        assert new_user.recipes[0].title == "Testowy Przepis"
-        assert new_user.recipes[0].owner.login == "chef_model_test"
+    assert len(loaded_user.recipes) == 1
+    assert loaded_user.recipes[0].title == "Testowy Przepis"
+    assert loaded_user.recipes[0].owner.login == "chef_model_test"

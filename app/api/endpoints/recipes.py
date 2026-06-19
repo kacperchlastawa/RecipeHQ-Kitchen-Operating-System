@@ -8,7 +8,7 @@ from app.api.deps import get_current_user
 from app.core.s3 import s3_service
 from app.db.models import User, Recipe, UserRole, ProjectParticipant, project_recipes
 from app.db.session import get_db
-from app.schemas.recipe import RecipeCreate, RecipeResponse, RecipeUpdate
+from app.schemas.recipe import RecipeResponse
 
 router = APIRouter()
 ROLE_PERMISSIONS = {

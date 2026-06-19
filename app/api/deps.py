@@ -8,7 +8,7 @@ from app.db.models import User,ProjectParticipant,UserRole
 from app.db.session import get_db
 from app.schemas.auth import TokenData
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login")
 
 async def get_current_user(db:AsyncSession = Depends(get_db),token : str = Depends(oauth2_scheme) ) -> User:
     """
